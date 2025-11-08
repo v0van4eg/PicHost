@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Журнал Действий - Админ-панель</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .filters { margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px; }
+        .filters label { display: inline-block; margin-right: 10px; }
+        .filters input, .filters select { padding: 5px; margin: 0 5px 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        .filters button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .filters button:hover { background-color: #0056b3; }
+        .log-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .log-table th, .log-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        .log-table th { background-color: #f2f2f2; }
+        .log-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .pagination { margin-top: 20px; text-align: center; }
+        .pagination a { padding: 8px 16px; text-decoration: none; border: 1px solid #ddd; color: #007bff; }
+        .pagination a.active { background-color: #007bff; color: white; }
+        .pagination a:hover:not(.active) { background-color: #e9ecef; }
+        .details { max-width: 300px; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Журнал Действий Пользователей</h1>
+        <a href="/admin" style="color: black; text-decoration: underline;">← Назад к админ-панели</a>
+
+        <div class="filters">
+            <form method="GET">
+                <label for="search_user">Поиск по пользователю:</label>
+                <input type="text" id="search_user" name="search_user" value="{{ search_user or '' }}" placeholder="Имя пользователя...">
+
+                <label for="search_action">Тип действия:</label>
+                <select id="search_action" name="search_action">
+                    <option value="">Все действия</option>
+                    {% for action in available_actions %}
+                        <option value="{{ action }}" {% if search_action == action %}selected{% endif %}>{{ action }}</option>
+                    {% endfor %}
+                </select>
+
+                <label for="date_from">Дата от:</label>
+                <input type="date" id="date_from" name="date_from" value="{{ date_from or '' }}">
+
+                <label for="date_to">Дата до:</label>
+                <input type="date" id="date_to" name="date_to" value="{{ date_to or '' }}">
+
+                <button type="submit">Применить фильтры</button>
+            </form>
+        </div>
+
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th>Время</th>
+                    <th>Пользователь (ID)</th>
+                    <th>Действие</th>
+                    <th>Тип Ресурса</th>
+                    <th>Имя Ресурса</th>
+                    <th>Детали</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</td>
+                    <td>{{ log.username }} ({{ log.user_id[:8] if log.user_id else 'N/A' }})</td>
+                    <td>{{ log.action }}</td>
+                    <td>{{ log.resource_type or 'N/A' }}</td>
+                    <td>{{ log.resource_name or 'N/A' }}</td>
+                    <td class="details">{% if log.details %}{{ log.details | tojson(indent=2) }}{% else %}N/A{% endif %}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center;">Нет записей журнала.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Пагинация -->
+        {% if total_count > per_page %}
+        <div class="pagination">
+            {% for p in range(1, (total_count // per_page) + 2) %}
+                {% if p == page %}
+                    <a href="#" class="active">{{ p }}</a>
+                {% else %}
+                    <!-- Сохраняем параметры фильтрации при переходе по страницам -->
+                    <a href="{{ url_for('admin_logs', page=p, search_user=search_user, search_action=search_action, date_from=date_from, date_to=date_to) }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

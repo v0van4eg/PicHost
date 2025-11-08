@@ -1,0 +1,63 @@
+# docker-compose.yml
+services:
+  db:
+    image: postgres:13-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # - DATABASE_URL=${DATABASE_URL} # Удалена или закомментирована
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+  app:
+    build: .
+    image: pichost
+    container_name: app
+    environment:
+      - DOMAIN=${DOMAIN}
+      # Передаем базовые переменные для построения строки подключения
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST} # <-- Добавлено
+      - POSTGRES_PORT=${POSTGRES_PORT} # <-- Добавлено
+      # - DATABASE_URL=${DATABASE_URL} # Удалена или закомментирована
+      # OAuth Configuration
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
+      - OAUTH_METADATA_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
+      - OAUTH_SCOPE=${OAUTH_SCOPE}
+      - OAUTH_CODE_CHALLENGE_METHOD=${OAUTH_CODE_CHALLENGE_METHOD}
+      # Fallback OAuth URLs
+      - OAUTH_BASE_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect
+      - OAUTH_AUTHORIZE_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth
+      - OAUTH_ACCESS_TOKEN_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token
+      - OAUTH_LOGOUT_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout
+    volumes:
+      - ./static:/app/static
+      - ./images:/app/images
+      - ./thumbnails:/app/thumbnails
+      - ./templates:/app/templates
+      - ./gunicorn_config.py:/app/gunicorn_config.py
+    restart: always
+    depends_on:
+      - db
+
+  web:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./static:/app/static:ro
+      - ./templates:/app/templates:ro
+      - ./images:/app/images:rw
+      - ./thumbnails:/app/thumbnails:rw
+    restart: always
+    depends_on:
+      - app
