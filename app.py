@@ -341,61 +341,77 @@ def process_zip(zip_path):
             zip_basename = os.path.basename(zip_path)
             album_name_raw = os.path.splitext(zip_basename)[0]
             album_name = safe_folder_name(album_name_raw)
+            album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
 
             # Очистка превью перед обработкой нового альбома
             cleanup_album_thumbnails(album_name)
 
-            album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
+            # Создаем папку альбома если не существует
             os.makedirs(album_path, exist_ok=True)
 
-            # Извлечение архива
-            zip_ref.extractall(album_path)
-
+            # ОПТИМИЗАЦИЯ 1: Получаем список файлов заранее и фильтруем только изображения
             allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
+            image_files = [
+                file_info for file_info in zip_ref.infolist()
+                if not file_info.is_dir() and
+                   os.path.splitext(file_info.filename.lower())[1] in allowed_extensions
+            ]
+
+            # ОПТИМИЗАЦИЯ 2: Извлекаем только изображения, пропускаем служебные файлы
+            zip_ref.extractall(album_path, members=image_files)
+
             files_to_insert = []
 
-            # Собираем все данные для вставки
-            for root, dirs, files in os.walk(album_path):
-                rel_root = os.path.relpath(root, album_path)
-                if rel_root == '.':
+            # ОПТИМИЗАЦИЯ 3: Проходим по извлеченным файлам, а не по всей файловой системе
+            for file_info in image_files:
+                original_file_path = os.path.join(album_path, file_info.filename)
+
+                # Проверяем что файл действительно существует после извлечения
+                if not os.path.exists(original_file_path):
                     continue
 
-                if rel_root.count(os.sep) == 0:
-                    article_folder_raw = os.path.basename(root)
+                # ОПТИМИЗАЦИЯ 4: Определяем артикул из пути файла в архиве
+                file_dir = os.path.dirname(file_info.filename)
+                if file_dir:
+                    # Если файл в подпапке - используем имя папки как артикул
+                    article_folder_raw = os.path.basename(file_dir)
                     article_folder_norm = safe_folder_name(article_folder_raw)
 
-                    original_article_path = root
-                    normalized_article_path = os.path.join(os.path.dirname(root), article_folder_norm)
-                    if original_article_path != normalized_article_path:
-                        os.rename(original_article_path, normalized_article_path)
-                        root = normalized_article_path
+                    # ОПТИМИЗАЦИЯ 5: Нормализуем имя папки если нужно
+                    original_dir = os.path.dirname(original_file_path)
+                    normalized_dir = os.path.join(os.path.dirname(original_dir), article_folder_norm)
 
-                    if files:
-                        for file_name in files:
-                            file_path = os.path.join(root, file_name)
-                            if os.path.isfile(file_path):
-                                _, ext = os.path.splitext(file_name.lower())
-                                if ext not in allowed_extensions:
-                                    logger.info(f"Skipping non-image file: {file_path}")
-                                    continue
+                    if original_dir != normalized_dir:
+                        os.makedirs(os.path.dirname(normalized_dir), exist_ok=True)
+                        # Перемещаем файл в нормализованную папку
+                        normalized_file_path = os.path.join(normalized_dir, os.path.basename(original_file_path))
+                        os.rename(original_file_path, normalized_file_path)
+                        original_file_path = normalized_file_path
+                else:
+                    # Если файл в корне альбома - используем имя файла без расширения как артикул
+                    article_folder_norm = safe_folder_name(os.path.splitext(os.path.basename(original_file_path))[0])
 
-                                relative_file_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER']).replace(
-                                    os.sep, '/')
-                                encoded_path = quote(relative_file_path, safe='/')
-                                public_link = f"{base_url}/images/{encoded_path}"
+                # ОПТИМИЗАЦИЯ 6: Сразу вычисляем относительный путь
+                relative_file_path = os.path.relpath(original_file_path, app.config['UPLOAD_FOLDER']).replace(os.sep,
+                                                                                                              '/')
+                encoded_path = quote(relative_file_path, safe='/')
+                public_link = f"{base_url}/images/{encoded_path}"
 
-                                files_to_insert.append((
-                                    relative_file_path,
-                                    album_name,
-                                    article_folder_norm,
-                                    public_link
-                                ))
+                files_to_insert.append((
+                    relative_file_path,
+                    album_name,
+                    article_folder_norm,
+                    public_link
+                ))
+
+            # ОПТИМИЗАЦИЯ 7: Удаляем пустые папки которые могли остаться
+            cleanup_empty_folders(album_path)
 
             # Используем одну транзакцию для всех операций
             operations = [
                 ("DELETE FROM files WHERE album_name = %s", (album_name,)),
                 ("""INSERT INTO files (filename, album_name, article_number, public_link) 
-                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)  # True указывает на executemany
+                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)
             ]
 
             db_manager.execute_in_transaction(operations)
@@ -406,6 +422,22 @@ def process_zip(zip_path):
     except Exception as e:
         logger.error(f"Error processing ZIP file {zip_path}: {e}")
         return False
+
+
+def cleanup_empty_folders(folder_path):
+    """Рекурсивно удаляет пустые папки"""
+    try:
+        for root, dirs, files in os.walk(folder_path, topdown=False):
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                try:
+                    if not os.listdir(dir_path):  # Папка пуста
+                        os.rmdir(dir_path)
+                        logger.debug(f"Removed empty folder: {dir_path}")
+                except OSError:
+                    pass  # Папка не пуста или нет прав
+    except Exception as e:
+        logger.error(f"Error cleaning up empty folders in {folder_path}: {e}")
 
 
 def log_user_action(action, resource_type=None, resource_name=None, details=None):
@@ -528,12 +560,9 @@ def api_files():
 
 
 # API: список альбомов
-@app.route('/api/albums')
-@login_required
-def api_albums():
-    logger.info("API albums endpoint called")
-    albums = get_albums()
-    return jsonify(albums)
+def get_albums():
+    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
+    return [album['album_name'] for album in results] if results else []
 
 
 # API: список артикулов для альбома
