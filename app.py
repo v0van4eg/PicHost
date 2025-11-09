@@ -21,9 +21,6 @@ import json
 from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from zip_processor import ZipProcessor  # Добавлен новый импорт
-
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -56,12 +53,6 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
-
-# Инициализация процессора ZIP-файлов
-zip_processor = ZipProcessor(
-    upload_folder=app.config['UPLOAD_FOLDER'],
-    base_url=base_url
-)
 
 # --- Вспомогательные функции ---
 def safe_folder_name(name: str) -> str:
@@ -221,38 +212,8 @@ def init_db():
 
 # Получение списка альбомов
 def get_albums():
-    try:
-        results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
-        logger.info(f"Raw albums query results: {results}")
-
-        if results:
-            albums = []
-            for album in results:
-                # Проверяем наличие ключа и логируем структуру
-                logger.info(f"Album record structure: {album}")
-                if 'album_name' in album:
-                    albums.append(album['album_name'])
-                else:
-                    logger.warning(f"Missing 'album_name' key in record: {album}")
-            return albums
-        else:
-            logger.info("No albums found in database")
-            return []
-    except Exception as e:
-        logger.error(f"Error in get_albums: {e}")
-        return []
-
-@app.route('/api/albums')
-@login_required
-def api_albums():
-    logger.info("API albums endpoint called")
-    try:
-        albums = get_albums()
-        logger.info(f"Returning albums: {albums}")
-        return jsonify(albums)
-    except Exception as e:
-        logger.error(f"Error in api_albums: {e}")
-        return jsonify({'error': str(e)}), 500
+    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
+    return [album['album_name'] for album in results] if results else []
 
 
 # Получение списка артикулов для указанного альбома
@@ -373,21 +334,78 @@ def sync_db_with_filesystem():
         raise
 
 
-
-def cleanup_empty_folders(folder_path):
-    """Рекурсивно удаляет пустые папки"""
+# Обработка ZIP-архива
+def process_zip(zip_path):
     try:
-        for root, dirs, files in os.walk(folder_path, topdown=False):
-            for dir_name in dirs:
-                dir_path = os.path.join(root, dir_name)
-                try:
-                    if not os.listdir(dir_path):  # Папка пуста
-                        os.rmdir(dir_path)
-                        logger.debug(f"Removed empty folder: {dir_path}")
-                except OSError:
-                    pass  # Папка не пуста или нет прав
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_basename = os.path.basename(zip_path)
+            album_name_raw = os.path.splitext(zip_basename)[0]
+            album_name = safe_folder_name(album_name_raw)
+
+            # Очистка превью перед обработкой нового альбома
+            cleanup_album_thumbnails(album_name)
+
+            album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
+            os.makedirs(album_path, exist_ok=True)
+
+            # Извлечение архива
+            zip_ref.extractall(album_path)
+
+            allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
+            files_to_insert = []
+
+            # Собираем все данные для вставки
+            for root, dirs, files in os.walk(album_path):
+                rel_root = os.path.relpath(root, album_path)
+                if rel_root == '.':
+                    continue
+
+                if rel_root.count(os.sep) == 0:
+                    article_folder_raw = os.path.basename(root)
+                    article_folder_norm = safe_folder_name(article_folder_raw)
+
+                    original_article_path = root
+                    normalized_article_path = os.path.join(os.path.dirname(root), article_folder_norm)
+                    if original_article_path != normalized_article_path:
+                        os.rename(original_article_path, normalized_article_path)
+                        root = normalized_article_path
+
+                    if files:
+                        for file_name in files:
+                            file_path = os.path.join(root, file_name)
+                            if os.path.isfile(file_path):
+                                _, ext = os.path.splitext(file_name.lower())
+                                if ext not in allowed_extensions:
+                                    logger.info(f"Skipping non-image file: {file_path}")
+                                    continue
+
+                                relative_file_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER']).replace(
+                                    os.sep, '/')
+                                encoded_path = quote(relative_file_path, safe='/')
+                                public_link = f"{base_url}/images/{encoded_path}"
+
+                                files_to_insert.append((
+                                    relative_file_path,
+                                    album_name,
+                                    article_folder_norm,
+                                    public_link
+                                ))
+
+            # Используем одну транзакцию для всех операций
+            operations = [
+                ("DELETE FROM files WHERE album_name = %s", (album_name,)),
+                ("""INSERT INTO files (filename, album_name, article_number, public_link) 
+                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)  # True указывает на executemany
+            ]
+
+            db_manager.execute_in_transaction(operations)
+
+            logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
+            return True
+
     except Exception as e:
-        logger.error(f"Error cleaning up empty folders in {folder_path}: {e}")
+        logger.error(f"Error processing ZIP file {zip_path}: {e}")
+        return False
 
 
 def log_user_action(action, resource_type=None, resource_name=None, details=None):
@@ -483,42 +501,20 @@ def upload_zip():
         return jsonify({'error': 'No selected file'}), 400
 
     if file:
-        # Валидация ZIP-файла
-        is_valid, validation_message = zip_processor.validate_zip_file(file)
-        if not is_valid:
-            return jsonify({'error': validation_message}), 400
+        original_name = file.filename
+        base_name = os.path.basename(original_name)
+        name_without_ext, _ = os.path.splitext(base_name)
+        safe_zip_name = safe_folder_name(name_without_ext) + '.zip'
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_zip_name)
+        file.save(file_path)
 
-        # Сохранение ZIP-файла
-        file_path, safe_zip_name = zip_processor.save_uploaded_zip(file)
-        if not file_path:
-            return jsonify({'error': 'Failed to save uploaded file'}), 500
-
-        # Обработка ZIP-файла
-        success, album_name, file_count = zip_processor.process_zip(
-            file_path,
-            cleanup_album_thumbnails_func=cleanup_album_thumbnails
-        )
+        success = process_zip(file_path)
 
         if success:
-            # Удаляем временный ZIP-файл
-            try:
-                os.remove(file_path)
-            except Exception as e:
-                logger.warning(f"Could not remove temporary ZIP file {file_path}: {e}")
-
-            log_user_action('upload', 'album', safe_zip_name, {'file_count': file_count})
-            return jsonify({
-                'message': 'Files uploaded successfully',
-                'album_name': album_name,
-                'file_count': file_count
-            })
+            os.remove(file_path)
+            log_user_action('upload', 'album', safe_zip_name)
+            return jsonify({'message': 'Files uploaded successfully', 'album_name': safe_folder_name(name_without_ext)})
         else:
-            # В случае ошибки тоже удаляем временный файл
-            try:
-                os.remove(file_path)
-            except Exception as e:
-                logger.warning(f"Could not remove temporary ZIP file {file_path}: {e}")
-
             return jsonify({'error': 'Failed to process ZIP file'}), 500
 
 
@@ -529,6 +525,15 @@ def api_files():
     logger.info("API files endpoint called")
     files = get_all_files()
     return jsonify(files)
+
+
+# API: список альбомов
+@app.route('/api/albums')
+@login_required
+def api_albums():
+    logger.info("API albums endpoint called")
+    albums = get_albums()
+    return jsonify(albums)
 
 
 # API: список артикулов для альбома
@@ -903,22 +908,13 @@ def api_count_album(album_name):
     logger.info(f"API count album endpoint called for: {album_name}")
     try:
         result = db_manager.execute_query(
-            "SELECT COUNT(*) as file_count FROM files WHERE album_name = %s",
+            "SELECT COUNT(*) as count FROM files WHERE album_name = %s",
             (album_name,),
             fetch=True
         )
-
-        # Отладочная информация
-        logger.info(f"Count query result: {result}")
-
-        if result and len(result) > 0:
-            count = result[0].get('file_count', 0)
-            logger.info(f"Album {album_name} has {count} files")
-            return jsonify({'count': count})
-        else:
-            logger.warning(f"No count result for album {album_name}")
-            return jsonify({'count': 0})
-
+        count = result[0]['count'] if result else 0
+        logger.info(f"Album {album_name} has {count} files")
+        return jsonify({'count': count})
     except Exception as e:
         logger.error(f"Error counting files for album {album_name}: {e}")
         return jsonify({'error': str(e)}), 500
@@ -932,24 +928,17 @@ def api_count_article(album_name, article_name):
     logger.info(f"API count article endpoint called for: {album_name}/{article_name}")
     try:
         result = db_manager.execute_query(
-            "SELECT COUNT(*) as file_count FROM files WHERE album_name = %s AND article_number = %s",
+            "SELECT COUNT(*) as count FROM files WHERE album_name = %s AND article_number = %s",
             (album_name, article_name),
             fetch=True
         )
-
-        logger.info(f"Article count query result: {result}")
-
-        if result and len(result) > 0:
-            count = result[0].get('file_count', 0)
-            logger.info(f"Article {article_name} in album {album_name} has {count} files")
-            return jsonify({'count': count})
-        else:
-            logger.warning(f"No count result for article {article_name} in album {album_name}")
-            return jsonify({'count': 0})
-
+        count = result[0]['count'] if result else 0
+        logger.info(f"Article {article_name} in album {album_name} has {count} files")
+        return jsonify({'count': count})
     except Exception as e:
         logger.error(f"Error counting files for article {article_name} in album {album_name}: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/admin')
 @login_required
