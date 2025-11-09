@@ -5,8 +5,10 @@ from psycopg2.extras import DictCursor
 import logging
 import time
 from threading import Lock
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
 
 class DatabaseManager:
     def __init__(self):
@@ -15,17 +17,17 @@ class DatabaseManager:
         password = os.environ.get('POSTGRES_PASSWORD', 'password')
         db_name = os.environ.get('POSTGRES_DB', 'pichosting')
         # Получаем хост и порт из переменных окружения
-        host = os.environ.get('POSTGRES_HOST', 'db') # Используем 'db' как значение по умолчанию
-        port = os.environ.get('POSTGRES_PORT', '5432') # Стандартный порт
+        host = os.environ.get('POSTGRES_HOST', 'db')  # Используем 'db' как значение по умолчанию
+        port = os.environ.get('POSTGRES_PORT', '5432')  # Стандартный порт
 
         self.database_url = f'postgresql://{user}:{password}@{host}:{port}/{db_name}'
 
-        logger.info(f"Database URL constructed for host: {host}, port: {port}, db: {db_name}") # Для отладки
+        logger.info(f"Database URL constructed for host: {host}, port: {port}, db: {db_name}")  # Для отладки
 
         self.conn = None
         self.lock = Lock()
         self.last_connection_time = 0
-        self.connection_timeout = 300 # 5 минут
+        self.connection_timeout = 300  # 5 минут
 
     def get_connection(self):
         """Получение соединения с проверкой состояния"""
@@ -33,8 +35,8 @@ class DatabaseManager:
             current_time = time.time()
             # Проверяем нужно ли переподключиться
             if (self.conn is None or
-                self.conn.closed != 0 or
-                current_time - self.last_connection_time > self.connection_timeout):
+                    self.conn.closed != 0 or
+                    current_time - self.last_connection_time > self.connection_timeout):
                 self._close_connection()
                 self._create_connection()
             return self.conn
@@ -84,11 +86,11 @@ class DatabaseManager:
                     conn.commit()
 
                 if fetch:
-                    if cursor.description: # Проверяем, есть ли результаты для выборки
+                    if cursor.description:  # Проверяем, есть ли результаты для выборки
                         result = cursor.fetchall()
                         return [dict(row) for row in result]
                     else:
-                        return [] # Возвращаем пустой список, если fetch, но нет результата
+                        return []  # Возвращаем пустой список, если fetch, но нет результата
                 else:
                     return cursor.rowcount
 
@@ -103,7 +105,7 @@ class DatabaseManager:
                     self._close_connection()
 
                 if attempt < max_retries - 1:
-                    time.sleep(retry_delay * (attempt + 1)) # Увеличиваем задержку с каждой попыткой
+                    time.sleep(retry_delay * (attempt + 1))  # Увеличиваем задержку с каждой попыткой
                     continue
                 else:
                     logger.error(f"Failed to execute query after {max_retries} attempts: {e}")
@@ -121,9 +123,113 @@ class DatabaseManager:
                     cursor.close()
                 # Не закрываем соединение здесь - оно управляется классом
 
+    @contextmanager
+    def transaction(self):
+        """
+        Контекстный менеджер для выполнения операций в транзакции.
+
+        Пример использования:
+        with db_manager.transaction() as cursor:
+            cursor.execute("DELETE FROM files WHERE album_name = %s", (album_name,))
+            cursor.executemany(insert_query, files_to_insert)
+        """
+        conn = None
+        cursor = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            yield cursor
+            conn.commit()
+            logger.debug("Transaction committed successfully")
+        except Exception as e:
+            if conn:
+                conn.rollback()
+                logger.error("Transaction rolled back due to error")
+            raise
+        finally:
+            if cursor:
+                cursor.close()
+
+    def execute_in_transaction(self, operations):
+        """
+        Выполняет несколько операций в одной транзакции.
+
+        :param operations: список кортежей (query, params) или (query, params, executemany_flag)
+        :return: True если успешно, иначе исключение
+        """
+        conn = None
+        cursor = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            for operation in operations:
+                if len(operation) == 3 and operation[2]:
+                    # executemany операция
+                    query, params_list, _ = operation
+                    cursor.executemany(query, params_list)
+                else:
+                    # execute операция
+                    query, params = operation[:2]
+                    cursor.execute(query, params)
+
+            conn.commit()
+            logger.info(f"Transaction completed: {len(operations)} operations")
+            return True
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+                logger.error(f"Transaction failed after {len(operations)} operations: {e}")
+            raise
+        finally:
+            if cursor:
+                cursor.close()
+
+    def batch_execute(self, query, params_list, batch_size=1000):
+        """
+        Выполняет пакетные операции с разбивкой на части.
+
+        :param query: SQL запрос
+        :param params_list: список параметров для executemany
+        :param batch_size: размер батча
+        :return: общее количество обработанных строк
+        """
+        total_affected = 0
+        for i in range(0, len(params_list), batch_size):
+            batch = params_list[i:i + batch_size]
+            with self.transaction() as cursor:
+                cursor.executemany(query, batch)
+                total_affected += cursor.rowcount or 0
+            logger.debug(f"Processed batch {i // batch_size + 1}/{(len(params_list) - 1) // batch_size + 1}")
+
+        logger.info(f"Batch execute completed: {total_affected} rows affected")
+        return total_affected
+
+    def execute_many(self, query, params_list):
+        """
+        Выполняет операцию executemany в транзакции.
+
+        :param query: SQL запрос
+        :param params_list: список параметров
+        :return: количество обработанных строк
+        """
+        with self.transaction() as cursor:
+            cursor.executemany(query, params_list)
+            return cursor.rowcount or 0
+
     def close(self):
         """Закрытие всех соединений"""
         self._close_connection()
+
+    # Поддержка контекстного менеджера для использования в with блоках
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Контекстный менеджер - соединение управляется классом"""
+        pass
+
 
 # Глобальный экземпляр менеджера БД
 db_manager = DatabaseManager()

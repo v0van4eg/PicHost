@@ -1,6 +1,7 @@
 # app.py
 
-from auth_system import AuthManager, login_required, admin_required, role_required, auth_context_processor, is_authenticated, get_current_user
+from auth_system import AuthManager, login_required, admin_required, role_required, auth_context_processor, \
+    is_authenticated, get_current_user
 import os
 import zipfile
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
@@ -24,7 +25,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
 auth_manager.init_app(app)
@@ -34,7 +34,6 @@ auth_manager.register_routes()
 
 # Добавление контекстного процессора
 app.context_processor(auth_context_processor)
-
 
 app.config['UPLOAD_FOLDER'] = 'images'
 app.config['THUMBNAIL_FOLDER'] = 'thumbnails'
@@ -239,12 +238,10 @@ def get_all_files():
 # Синхронизация БД с файловой системой
 def sync_db_with_filesystem():
     """
-    Синхронизирует базу данных с файловой системой.
-    Удаляет из БД записи для файлов, которые больше не существуют в папке images,
-    и добавляет новые файлы, которые появились в файловой системе.
+    Синхронизирует базу данных с файловой системой в одной транзакции.
     """
     try:
-        # Получаем все файлы из БД
+        # Получаем все файлы из БД в одном запросе
         db_files_result = db_manager.execute_query(
             "SELECT filename, album_name, article_number, public_link FROM files",
             fetch=True
@@ -291,33 +288,45 @@ def sync_db_with_filesystem():
                             'public_link': public_link
                         }
 
-        # Находим файлы для удаления (есть в БД, но нет в ФС)
+        # Находим файлы для удаления и добавления
         files_to_delete = set(db_files.keys()) - set(fs_files.keys())
-
-        # Находим файлы для добавления (есть в ФС, но нет в БД)
         files_to_add = set(fs_files.keys()) - set(db_files.keys())
 
-        # Удаляем отсутствующие файлы из БД и их превью
+        # Подготавливаем операции для транзакции
+        operations = []
+
+        # Операция удаления
+        if files_to_delete:
+            delete_query = "DELETE FROM files WHERE filename = ANY(%s)"
+            operations.append((delete_query, (list(files_to_delete),)))
+
+        # Операция вставки
+        if files_to_add:
+            insert_data = []
+            for rel_path in files_to_add:
+                file_info = fs_files[rel_path]
+                insert_data.append((
+                    rel_path,
+                    file_info['album_name'],
+                    file_info['article_number'],
+                    file_info['public_link']
+                ))
+
+            insert_query = """
+                INSERT INTO files (filename, album_name, article_number, public_link) 
+                VALUES (%s, %s, %s, %s)
+            """
+            operations.append((insert_query, insert_data, True))  # True для executemany
+
+        # Выполняем все операции в одной транзакции
+        if operations:
+            db_manager.execute_in_transaction(operations)
+
+        # Очищаем превью для удаленных файлов (вне транзакции, так как это файловые операции)
         for rel_path in files_to_delete:
             cleanup_file_thumbnails(rel_path)
-            db_manager.execute_query("DELETE FROM files WHERE filename = %s", (rel_path,), commit=True)
-            logger.info(f"Sync: Deleted from DB - {rel_path}")
 
-        # Добавляем новые файлы в БД
-        for rel_path in files_to_add:
-            file_info = fs_files[rel_path]
-            try:
-                db_manager.execute_query(
-                    "INSERT INTO files (filename, album_name, article_number, public_link) VALUES (%s, %s, %s, %s)",
-                    (rel_path, file_info['album_name'], file_info['article_number'], file_info['public_link']),
-                    commit=True
-                )
-                logger.info(
-                    f"Sync: Added to DB - {rel_path} (Album: {file_info['album_name']}, Article: {file_info['article_number']})")
-            except Exception as e:
-                logger.error(f"Sync: Error adding file {rel_path} to DB: {e}")
-
-        logger.info(f"Sync: Deleted {len(files_to_delete)} records, added {len(files_to_add)} records")
+        logger.info(f"Sync completed: deleted {len(files_to_delete)} records, added {len(files_to_add)} records")
         return list(files_to_delete), list(files_to_add)
 
     except Exception as e:
@@ -333,7 +342,7 @@ def process_zip(zip_path):
             album_name_raw = os.path.splitext(zip_basename)[0]
             album_name = safe_folder_name(album_name_raw)
 
-            # ОЧИСТКА ПРЕВЬЮ ПЕРЕД ОБРАБОТКОЙ НОВОГО АЛЬБОМА
+            # Очистка превью перед обработкой нового альбома
             cleanup_album_thumbnails(album_name)
 
             album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
@@ -342,12 +351,10 @@ def process_zip(zip_path):
             # Извлечение архива
             zip_ref.extractall(album_path)
 
-            # Удаление старых записей для этого альбома из БД
-            db_manager.execute_query("DELETE FROM files WHERE album_name = %s", (album_name,), commit=True)
-
             allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
+            files_to_insert = []
 
-            # Проход по всем файлам в альбоме
+            # Собираем все данные для вставки
             for root, dirs, files in os.walk(album_path):
                 rel_root = os.path.relpath(root, album_path)
                 if rel_root == '.':
@@ -374,21 +381,30 @@ def process_zip(zip_path):
 
                                 relative_file_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER']).replace(
                                     os.sep, '/')
-
                                 encoded_path = quote(relative_file_path, safe='/')
                                 public_link = f"{base_url}/images/{encoded_path}"
 
-                                # Вставляем запись в БД
-                                db_manager.execute_query(
-                                    "INSERT INTO files (filename, album_name, article_number, public_link) VALUES (%s, %s, %s, %s)",
-                                    (relative_file_path, album_name, article_folder_norm, public_link),
-                                    commit=True
-                                )
+                                files_to_insert.append((
+                                    relative_file_path,
+                                    album_name,
+                                    article_folder_norm,
+                                    public_link
+                                ))
 
+            # Используем одну транзакцию для всех операций
+            operations = [
+                ("DELETE FROM files WHERE album_name = %s", (album_name,)),
+                ("""INSERT INTO files (filename, album_name, article_number, public_link) 
+                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)  # True указывает на executemany
+            ]
+
+            db_manager.execute_in_transaction(operations)
+
+            logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
             return True
 
     except Exception as e:
-        logger.error(f"Error processing ZIP file: {e}")
+        logger.error(f"Error processing ZIP file {zip_path}: {e}")
         return False
 
 
@@ -409,7 +425,7 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
         user_id = 'anonymous'
         username = 'anonymous'
     else:
-        user_id = user.get('sub') # Используем уникальный идентификатор пользователя из OIDC
+        user_id = user.get('sub')  # Используем уникальный идентификатор пользователя из OIDC
         username = user.get('name', user.get('preferred_username', 'unknown_user'))
 
     details_json = json.dumps(details) if details else None
@@ -419,11 +435,12 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
     VALUES (%s, %s, %s, %s, %s, %s)
     """
     try:
-        db_manager.execute_query(query, (user_id, username, action, resource_type, resource_name, details_json), commit=True)
-        logger.info(f"Logged action '{action}' for user '{username}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
+        db_manager.execute_query(query, (user_id, username, action, resource_type, resource_name, details_json),
+                                 commit=True)
+        logger.info(
+            f"Logged action '{action}' for user '{username}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
     except Exception as e:
         logger.error(f"Failed to log action '{action}' for user '{username}': {e}")
-
 
 
 # --- Routes ---
@@ -435,9 +452,11 @@ def index():
     else:
         return render_template('hello.html')
 
+
 @app.route('/hello')
 def hello():
     return render_template('hello.html', base_url=base_url)
+
 
 # Эндпоинт синхронизации БД
 @app.route('/api/sync', methods=['GET'])
@@ -472,6 +491,7 @@ def api_cleanup_thumbnails(album_name):
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_zip():
+    logger.info("Upload endpoint called")
     if 'zipfile' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
@@ -502,6 +522,7 @@ def upload_zip():
 @app.route('/api/files')
 @login_required
 def api_files():
+    logger.info("API files endpoint called")
     files = get_all_files()
     return jsonify(files)
 
@@ -510,6 +531,7 @@ def api_files():
 @app.route('/api/albums')
 @login_required
 def api_albums():
+    logger.info("API albums endpoint called")
     albums = get_albums()
     return jsonify(albums)
 
@@ -518,6 +540,7 @@ def api_albums():
 @app.route('/api/articles/<album_name>')
 @login_required
 def api_articles(album_name):
+    logger.info(f"API articles endpoint called for album: {album_name}")
     articles = get_articles(album_name)
     return jsonify(articles)
 
@@ -527,6 +550,7 @@ def api_articles(album_name):
 @app.route('/api/files/<album_name>/<article_name>')
 @login_required
 def api_files_filtered(album_name, article_name=None):
+    logger.info(f"API files filtered endpoint called for album: {album_name}, article: {article_name}")
     if article_name:
         results = db_manager.execute_query(
             "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE album_name = %s AND article_number = %s ORDER BY created_at DESC",
@@ -637,6 +661,7 @@ def serve_thumbnail(filename, size):
 @login_required
 def api_export_xlsx():
     """Создание XLSX документа с ссылками"""
+    logger.info("API export XLSX endpoint called")
     try:
         data = request.get_json()
         if not data:
@@ -781,6 +806,7 @@ def api_export_xlsx():
 @role_required(['appadmin'])
 def api_delete_album(album_name):
     """Удаление альбома из БД и файловой системы"""
+    logger.info(f"API delete album endpoint called for: {album_name}")
     try:
         # Получаем все файлы альбома
         files = db_manager.execute_query(
@@ -814,7 +840,8 @@ def api_delete_album(album_name):
             shutil.rmtree(thumbnail_album_path)
             logger.info(f"Deleted album thumbnails directory: {thumbnail_album_path}")
 
-        log_user_action('delete_album', 'album', album_name, {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
+        log_user_action('delete_album', 'album', album_name,
+                        {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
         return jsonify({'message': f'Альбом "{album_name}" успешно удален'})
 
     except Exception as e:
@@ -827,6 +854,7 @@ def api_delete_album(album_name):
 @role_required(['appadmin'])
 def api_delete_article(album_name, article_name):
     """Удаление артикула из БД и файловой системы"""
+    logger.info(f"API delete article endpoint called for: {album_name}/{article_name}")
     try:
         # Получаем все файлы артикула
         files = db_manager.execute_query(
@@ -863,7 +891,8 @@ def api_delete_article(album_name, article_name):
 
         # Синхронизируем БД после удаления
         sync_db_with_filesystem()
-        log_user_action('delete_article', 'article', f"{album_name}/{article_name}", {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
+        log_user_action('delete_article', 'article', f"{album_name}/{article_name}",
+                        {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
         return jsonify({'message': f'Артикул "{article_name}" в альбоме "{album_name}" успешно удален'})
 
     except Exception as e:
@@ -876,6 +905,7 @@ def api_delete_article(album_name, article_name):
 @login_required
 def api_count_album(album_name):
     """Возвращает количество файлов в альбоме"""
+    logger.info(f"API count album endpoint called for: {album_name}")
     try:
         result = db_manager.execute_query(
             "SELECT COUNT(*) as count FROM files WHERE album_name = %s",
@@ -883,16 +913,19 @@ def api_count_album(album_name):
             fetch=True
         )
         count = result[0]['count'] if result else 0
+        logger.info(f"Album {album_name} has {count} files")
         return jsonify({'count': count})
     except Exception as e:
         logger.error(f"Error counting files for album {album_name}: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 # API: количество файлов в артикуле
 @app.route('/api/count/article/<album_name>/<article_name>')
 @login_required
 def api_count_article(album_name, article_name):
     """Возвращает количество файлов в артикуле"""
+    logger.info(f"API count article endpoint called for: {album_name}/{article_name}")
     try:
         result = db_manager.execute_query(
             "SELECT COUNT(*) as count FROM files WHERE album_name = %s AND article_number = %s",
@@ -900,6 +933,7 @@ def api_count_article(album_name, article_name):
             fetch=True
         )
         count = result[0]['count'] if result else 0
+        logger.info(f"Article {article_name} in album {album_name} has {count} files")
         return jsonify({'count': count})
     except Exception as e:
         logger.error(f"Error counting files for article {article_name} in album {album_name}: {e}")
@@ -910,17 +944,21 @@ def api_count_article(album_name, article_name):
 @login_required
 @role_required(['appadmin'])
 def admin_panel():
+    logger.info("Admin panel accessed")
     user = session.get('user', {})
     display_roles = user.get('display_roles', [])
     all_roles = user.get('roles', [])
     return render_template('admin.html', display_roles=display_roles, all_roles=all_roles)
 
+
 @app.route('/admin/logs')
 @login_required
-@admin_required # Используем существующий декоратор для проверки прав администратора
+@admin_required
 def admin_logs():
+    """Страница с логами действий пользователей"""
+    logger.info("Admin logs accessed")
     page = request.args.get('page', 1, type=int)
-    per_page = 50 # Количество записей на странице
+    per_page = 50  # Количество записей на странице
     offset = (page - 1) * per_page
 
     search_user = request.args.get('search_user', '')
@@ -933,7 +971,7 @@ def admin_logs():
     params = []
 
     if search_user:
-        conditions.append("username ILIKE %s") # ILIKE для нечувствительного к регистру поиска
+        conditions.append("username ILIKE %s")  # ILIKE для нечувствительного к регистру поиска
         params.append(f"%{search_user}%")
     if search_action:
         conditions.append("action = %s")
@@ -960,7 +998,8 @@ def admin_logs():
         logs = db_manager.execute_query(query, tuple(params), fetch=True)
         # Получаем общее количество записей для пагинации
         count_query = f"SELECT COUNT(*) as total FROM user_actions_log {where_clause}"
-        total_count_result = db_manager.execute_query(count_query, tuple(params[:-2]), fetch=True) # Исключаем LIMIT и OFFSET
+        total_count_result = db_manager.execute_query(count_query, tuple(params[:-2]),
+                                                      fetch=True)  # Исключаем LIMIT и OFFSET
         total_count = total_count_result[0]['total'] if total_count_result else 0
     except Exception as e:
         logger.error(f"Error fetching logs: {e}")
@@ -986,8 +1025,7 @@ def admin_logs():
                            date_from=date_from,
                            date_to=date_to,
                            available_actions=action_list,
-                           current_user=get_current_user()) # Передаем пользователя в шаблон
-
+                           current_user=get_current_user())  # Передаем пользователя в шаблон
 
 
 # Инициализация базы данных при запуске приложения

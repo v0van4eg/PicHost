@@ -7,3 +7,4 @@ authlib
 jwt
 requests
 python-dotenv
+werkzeug
