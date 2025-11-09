@@ -1,6 +1,6 @@
 -- init.sql
 
--- Существующие таблицы...
+-- Таблица файлов...
 CREATE TABLE IF NOT EXISTS files (
     id SERIAL PRIMARY KEY,
     filename TEXT NOT NULL,

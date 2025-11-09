@@ -127,7 +127,6 @@ class DatabaseManager:
     def transaction(self):
         """
         Контекстный менеджер для выполнения операций в транзакции.
-
         Пример использования:
         with db_manager.transaction() as cursor:
             cursor.execute("DELETE FROM files WHERE album_name = %s", (album_name,))
@@ -153,7 +152,6 @@ class DatabaseManager:
     def execute_in_transaction(self, operations):
         """
         Выполняет несколько операций в одной транзакции.
-
         :param operations: список кортежей (query, params) или (query, params, executemany_flag)
         :return: True если успешно, иначе исключение
         """
@@ -189,7 +187,6 @@ class DatabaseManager:
     def batch_execute(self, query, params_list, batch_size=1000):
         """
         Выполняет пакетные операции с разбивкой на части.
-
         :param query: SQL запрос
         :param params_list: список параметров для executemany
         :param batch_size: размер батча
@@ -209,7 +206,6 @@ class DatabaseManager:
     def execute_many(self, query, params_list):
         """
         Выполняет операцию executemany в транзакции.
-
         :param query: SQL запрос
         :param params_list: список параметров
         :return: количество обработанных строк
