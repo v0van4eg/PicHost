@@ -212,13 +212,29 @@ function updateButtonState(button) {
 // --- Функции для подсчета файлов ---
 async function getAlbumFileCount(albumName) {
     try {
+        console.log('Getting file count for album:', albumName);
         const response = await fetch(`/api/count/album/${encodeURIComponent(albumName)}`);
-        if (!response.ok) throw new Error('Failed to get album count');
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
         const data = await response.json();
-        return data.count || 0;
+        console.log('File count response:', data);
+
+        // Проверяем структуру ответа
+        if (data && typeof data.count === 'number') {
+            return data.count;
+        } else if (data && data.error) {
+            throw new Error(data.error);
+        } else {
+            throw new Error('Invalid response format');
+        }
     } catch (error) {
         console.error('Error getting album file count:', error);
-        return 0;
+        showNotification('Error getting album file count: ' + error.message, 'error');
+        throw error;
     }
 }
 

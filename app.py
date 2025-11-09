@@ -212,8 +212,38 @@ def init_db():
 
 # Получение списка альбомов
 def get_albums():
-    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
-    return [album['album_name'] for album in results] if results else []
+    try:
+        results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
+        logger.info(f"Raw albums query results: {results}")
+
+        if results:
+            albums = []
+            for album in results:
+                # Проверяем наличие ключа и логируем структуру
+                logger.info(f"Album record structure: {album}")
+                if 'album_name' in album:
+                    albums.append(album['album_name'])
+                else:
+                    logger.warning(f"Missing 'album_name' key in record: {album}")
+            return albums
+        else:
+            logger.info("No albums found in database")
+            return []
+    except Exception as e:
+        logger.error(f"Error in get_albums: {e}")
+        return []
+
+@app.route('/api/albums')
+@login_required
+def api_albums():
+    logger.info("API albums endpoint called")
+    try:
+        albums = get_albums()
+        logger.info(f"Returning albums: {albums}")
+        return jsonify(albums)
+    except Exception as e:
+        logger.error(f"Error in api_albums: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # Получение списка артикулов для указанного альбома
@@ -557,12 +587,6 @@ def api_files():
     logger.info("API files endpoint called")
     files = get_all_files()
     return jsonify(files)
-
-
-# API: список альбомов
-def get_albums():
-    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
-    return [album['album_name'] for album in results] if results else []
 
 
 # API: список артикулов для альбома
@@ -937,13 +961,22 @@ def api_count_album(album_name):
     logger.info(f"API count album endpoint called for: {album_name}")
     try:
         result = db_manager.execute_query(
-            "SELECT COUNT(*) as count FROM files WHERE album_name = %s",
+            "SELECT COUNT(*) as file_count FROM files WHERE album_name = %s",
             (album_name,),
             fetch=True
         )
-        count = result[0]['count'] if result else 0
-        logger.info(f"Album {album_name} has {count} files")
-        return jsonify({'count': count})
+
+        # Отладочная информация
+        logger.info(f"Count query result: {result}")
+
+        if result and len(result) > 0:
+            count = result[0].get('file_count', 0)
+            logger.info(f"Album {album_name} has {count} files")
+            return jsonify({'count': count})
+        else:
+            logger.warning(f"No count result for album {album_name}")
+            return jsonify({'count': 0})
+
     except Exception as e:
         logger.error(f"Error counting files for album {album_name}: {e}")
         return jsonify({'error': str(e)}), 500
@@ -957,17 +990,24 @@ def api_count_article(album_name, article_name):
     logger.info(f"API count article endpoint called for: {album_name}/{article_name}")
     try:
         result = db_manager.execute_query(
-            "SELECT COUNT(*) as count FROM files WHERE album_name = %s AND article_number = %s",
+            "SELECT COUNT(*) as file_count FROM files WHERE album_name = %s AND article_number = %s",
             (album_name, article_name),
             fetch=True
         )
-        count = result[0]['count'] if result else 0
-        logger.info(f"Article {article_name} in album {album_name} has {count} files")
-        return jsonify({'count': count})
+
+        logger.info(f"Article count query result: {result}")
+
+        if result and len(result) > 0:
+            count = result[0].get('file_count', 0)
+            logger.info(f"Article {article_name} in album {album_name} has {count} files")
+            return jsonify({'count': count})
+        else:
+            logger.warning(f"No count result for article {article_name} in album {album_name}")
+            return jsonify({'count': 0})
+
     except Exception as e:
         logger.error(f"Error counting files for article {article_name} in album {album_name}: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/admin')
 @login_required
