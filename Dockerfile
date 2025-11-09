@@ -6,7 +6,7 @@ COPY requirements.txt .
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY static templates app.py gunicorn_config.py database.py auth_system.py /app/
+COPY static templates app.py gunicorn_config.py database.py auth_system.py zip_processor.py /app/
 
 RUN mkdir /app/thumbnails /app/images
 

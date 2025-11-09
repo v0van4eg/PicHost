@@ -21,6 +21,9 @@ import json
 from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from zip_processor import ZipProcessor  # Добавлен новый импорт
+
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -53,6 +56,12 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
+
+# Инициализация процессора ZIP-файлов
+zip_processor = ZipProcessor(
+    upload_folder=app.config['UPLOAD_FOLDER'],
+    base_url=base_url
+)
 
 # --- Вспомогательные функции ---
 def safe_folder_name(name: str) -> str:
@@ -364,95 +373,6 @@ def sync_db_with_filesystem():
         raise
 
 
-# Обработка ZIP-архива
-def process_zip(zip_path):
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_basename = os.path.basename(zip_path)
-            album_name_raw = os.path.splitext(zip_basename)[0]
-            album_name = safe_folder_name(album_name_raw)
-            album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
-
-            # Очистка превью перед обработкой нового альбома
-            cleanup_album_thumbnails(album_name)
-
-            # Создаем папку альбома если не существует
-            os.makedirs(album_path, exist_ok=True)
-
-            # ОПТИМИЗАЦИЯ 1: Получаем список файлов заранее и фильтруем только изображения
-            allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
-            image_files = [
-                file_info for file_info in zip_ref.infolist()
-                if not file_info.is_dir() and
-                   os.path.splitext(file_info.filename.lower())[1] in allowed_extensions
-            ]
-
-            # ОПТИМИЗАЦИЯ 2: Извлекаем только изображения, пропускаем служебные файлы
-            zip_ref.extractall(album_path, members=image_files)
-
-            files_to_insert = []
-
-            # ОПТИМИЗАЦИЯ 3: Проходим по извлеченным файлам, а не по всей файловой системе
-            for file_info in image_files:
-                original_file_path = os.path.join(album_path, file_info.filename)
-
-                # Проверяем что файл действительно существует после извлечения
-                if not os.path.exists(original_file_path):
-                    continue
-
-                # ОПТИМИЗАЦИЯ 4: Определяем артикул из пути файла в архиве
-                file_dir = os.path.dirname(file_info.filename)
-                if file_dir:
-                    # Если файл в подпапке - используем имя папки как артикул
-                    article_folder_raw = os.path.basename(file_dir)
-                    article_folder_norm = safe_folder_name(article_folder_raw)
-
-                    # ОПТИМИЗАЦИЯ 5: Нормализуем имя папки если нужно
-                    original_dir = os.path.dirname(original_file_path)
-                    normalized_dir = os.path.join(os.path.dirname(original_dir), article_folder_norm)
-
-                    if original_dir != normalized_dir:
-                        os.makedirs(os.path.dirname(normalized_dir), exist_ok=True)
-                        # Перемещаем файл в нормализованную папку
-                        normalized_file_path = os.path.join(normalized_dir, os.path.basename(original_file_path))
-                        os.rename(original_file_path, normalized_file_path)
-                        original_file_path = normalized_file_path
-                else:
-                    # Если файл в корне альбома - используем имя файла без расширения как артикул
-                    article_folder_norm = safe_folder_name(os.path.splitext(os.path.basename(original_file_path))[0])
-
-                # ОПТИМИЗАЦИЯ 6: Сразу вычисляем относительный путь
-                relative_file_path = os.path.relpath(original_file_path, app.config['UPLOAD_FOLDER']).replace(os.sep,
-                                                                                                              '/')
-                encoded_path = quote(relative_file_path, safe='/')
-                public_link = f"{base_url}/images/{encoded_path}"
-
-                files_to_insert.append((
-                    relative_file_path,
-                    album_name,
-                    article_folder_norm,
-                    public_link
-                ))
-
-            # ОПТИМИЗАЦИЯ 7: Удаляем пустые папки которые могли остаться
-            cleanup_empty_folders(album_path)
-
-            # Используем одну транзакцию для всех операций
-            operations = [
-                ("DELETE FROM files WHERE album_name = %s", (album_name,)),
-                ("""INSERT INTO files (filename, album_name, article_number, public_link) 
-                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)
-            ]
-
-            db_manager.execute_in_transaction(operations)
-
-            logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
-            return True
-
-    except Exception as e:
-        logger.error(f"Error processing ZIP file {zip_path}: {e}")
-        return False
-
 
 def cleanup_empty_folders(folder_path):
     """Рекурсивно удаляет пустые папки"""
@@ -563,20 +483,42 @@ def upload_zip():
         return jsonify({'error': 'No selected file'}), 400
 
     if file:
-        original_name = file.filename
-        base_name = os.path.basename(original_name)
-        name_without_ext, _ = os.path.splitext(base_name)
-        safe_zip_name = safe_folder_name(name_without_ext) + '.zip'
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_zip_name)
-        file.save(file_path)
+        # Валидация ZIP-файла
+        is_valid, validation_message = zip_processor.validate_zip_file(file)
+        if not is_valid:
+            return jsonify({'error': validation_message}), 400
 
-        success = process_zip(file_path)
+        # Сохранение ZIP-файла
+        file_path, safe_zip_name = zip_processor.save_uploaded_zip(file)
+        if not file_path:
+            return jsonify({'error': 'Failed to save uploaded file'}), 500
+
+        # Обработка ZIP-файла
+        success, album_name, file_count = zip_processor.process_zip(
+            file_path,
+            cleanup_album_thumbnails_func=cleanup_album_thumbnails
+        )
 
         if success:
-            os.remove(file_path)
-            log_user_action('upload', 'album', safe_zip_name)
-            return jsonify({'message': 'Files uploaded successfully', 'album_name': safe_folder_name(name_without_ext)})
+            # Удаляем временный ZIP-файл
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temporary ZIP file {file_path}: {e}")
+
+            log_user_action('upload', 'album', safe_zip_name, {'file_count': file_count})
+            return jsonify({
+                'message': 'Files uploaded successfully',
+                'album_name': album_name,
+                'file_count': file_count
+            })
         else:
+            # В случае ошибки тоже удаляем временный файл
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temporary ZIP file {file_path}: {e}")
+
             return jsonify({'error': 'Failed to process ZIP file'}), 500
 
 
