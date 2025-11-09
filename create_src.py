@@ -35,6 +35,8 @@ def load_gitignore_rules(startpath):
     ignore_rules.append("favicon.ico")
     # ignore_rules.append("thumbnails/*")
     ignore_rules.append("LICENSE.txt")
+    ignore_rules.append("nginx.conf")
+    ignore_rules.append("env.example")
     return ignore_rules
 
 
