@@ -27,6 +27,7 @@ class ZipProcessor:
         Оптимизированная обработка ZIP-архива с многопоточностью
         """
         # Проверяем, не обрабатывается ли уже этот архив
+        logger.info(f"Обрабатываем ZIP: {zip_path}")
         zip_basename = os.path.basename(zip_path)
         with self.processing_lock:
             if zip_basename in self.active_processes:
@@ -53,7 +54,7 @@ class ZipProcessor:
                        os.path.splitext(file_info.filename.lower())[1] in allowed_extensions
                 ]
 
-                logger.info(f"Processing {len(image_files)} images with {self.max_workers} workers")
+                logger.info(f"Обработано {len(image_files)} файловв на {self.max_workers} воркерах")
 
                 # Параллельное извлечение файлов
                 if len(image_files) > 10:  # Используем многопоточность для больших архивов
