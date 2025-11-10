@@ -1,6 +1,5 @@
 .venv
 .idea
-.gitignore
 thumbnails
 images
 postgres_data
