@@ -30,15 +30,21 @@ class DatabaseManager:
         self.connection_timeout = 300  # 5 минут
 
     def get_connection(self):
-        """Получение соединения с проверкой состояния"""
         with self.lock:
+            current_pid = os.getpid()
             current_time = time.time()
-            # Проверяем нужно ли переподключиться
-            if (self.conn is None or
-                    self.conn.closed != 0 or
-                    current_time - self.last_connection_time > self.connection_timeout):
+
+            # Если PID изменился (форк) ИЛИ соединение мертво ИЛИ таймаут — пересоздать
+            if (
+                self.conn is None or
+                self.conn.closed != 0 or
+                current_pid != self.pid or
+                current_time - self.last_connection_time > self.connection_timeout
+            ):
                 self._close_connection()
                 self._create_connection()
+                self.pid = current_pid  # Обновляем PID
+
             return self.conn
 
     def _create_connection(self):
@@ -157,6 +163,7 @@ class DatabaseManager:
         """
         conn = None
         cursor = None
+        logger.info(f"Запускаем транзакцию с {len(operations)} операциями")
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -172,7 +179,7 @@ class DatabaseManager:
                     cursor.execute(query, params)
 
             conn.commit()
-            logger.info(f"Transaction completed: {len(operations)} operations")
+            logger.info(f"Транзакция успешна: {len(operations)} operations")
             return True
 
         except Exception as e:

@@ -21,7 +21,6 @@ import json
 from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -53,7 +52,6 @@ logger = logging.getLogger(__name__)
 # Конфигурация домена и базового URL получаем из переменных окружения
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
-
 
 
 # --- Вспомогательные функции ---
