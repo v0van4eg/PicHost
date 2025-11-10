@@ -1,4 +1,4 @@
-# auth_system.py - исправленная версия с фильтрацией ролей и отдельным шаблоном профиля
+# auth_system.py
 
 from flask import session, redirect, url_for, request, flash, render_template # Добавлен render_template
 from functools import wraps
@@ -7,6 +7,7 @@ import json
 import secrets
 import os
 from authlib.integrations.flask_client import OAuth
+from utils import log_user_login, log_user_logout  # Добавлен импорт
 
 
 class AuthManager:

@@ -3,10 +3,8 @@
 from auth_system import AuthManager, login_required, admin_required, role_required, auth_context_processor, \
     is_authenticated, get_current_user
 import os
-import zipfile
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
 import logging
-from urllib.parse import quote
 from PIL import Image
 import io
 import hashlib
@@ -19,8 +17,9 @@ import json
 from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
 from zip_processor import ZipProcessor
-from utils import safe_folder_name, cleanup_album_thumbnails, cleanup_empty_folders
+from utils import safe_folder_name, cleanup_album_thumbnails, log_user_action
 from sync_manager import SyncManager
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -388,41 +387,6 @@ def api_sync_stats():
         return jsonify({'error': str(e)}), 500
 
 
-def log_user_action(action, resource_type=None, resource_name=None, details=None):
-    """
-    Записывает действие пользователя в базу данных.
-
-    :param action: str - Тип действия (например, 'upload', 'delete_album', 'delete_article')
-    :param resource_type: str - Тип ресурса ('file', 'album', 'article')
-    :param resource_name: str - Имя ресурса
-    :param details: dict - Дополнительные детали (будет сериализовано в JSON)
-    """
-    user = get_current_user()
-    if not user:
-        # Если пользователь не аутентифицирован, можно логировать как анонимное действие
-        # или использовать специальное имя/ID.
-        # В данном примере используем 'anonymous'
-        user_id = 'anonymous'
-        username = 'anonymous'
-    else:
-        user_id = user.get('sub')  # Используем уникальный идентификатор пользователя из OIDC
-        username = user.get('name', user.get('preferred_username', 'unknown_user'))
-
-    details_json = json.dumps(details) if details else None
-
-    query = """
-    INSERT INTO user_actions_log (user_id, username, action, resource_type, resource_name, details)
-    VALUES (%s, %s, %s, %s, %s, %s)
-    """
-    try:
-        db_manager.execute_query(query, (user_id, username, action, resource_type, resource_name, details_json),
-                                 commit=True)
-        logger.info(
-            f"Logged action '{action}' for user '{username}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
-    except Exception as e:
-        logger.error(f"Failed to log action '{action}' for user '{username}': {e}")
-
-
 # --- Routes ---
 @app.route('/')
 def index():
@@ -477,7 +441,7 @@ def upload_zip():
 
         if success:
             os.remove(file_path)
-            log_user_action('upload', 'album', safe_zip_name)
+            log_user_action('upload', 'album', original_name)
             return jsonify({'message': 'Files uploaded successfully', 'album_name': result})
         else:
             # Удаляем ZIP файл в случае ошибки
