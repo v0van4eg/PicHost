@@ -416,6 +416,7 @@ def api_cleanup_thumbnails(album_name):
 
 
 # Загрузка ZIP
+# Загрузка ZIP
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_zip():
@@ -441,10 +442,10 @@ def upload_zip():
 
         if success:
             os.remove(file_path)
-            # log_user_action('upload', 'album', original_name)
+            # Исправленное логирование - используем result вместо uploaded_files
             log_user_action('upload', 'album', original_name, {
-                'file_count': len(uploaded_files),
-                'album_size': total_size
+                'album_name': result,
+                'original_filename': original_name
             })
             return jsonify({'message': 'Files uploaded successfully', 'album_name': result})
         else:
