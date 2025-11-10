@@ -1,13 +1,15 @@
-# zip_processor.py
+# zip_processor.py - ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 import os
 import zipfile
 import logging
+import time
 from database import db_manager
 from urllib.parse import quote
 from utils import safe_folder_name, cleanup_album_thumbnails, cleanup_empty_folders
 
-
 logger = logging.getLogger(__name__)
+
 
 class ZipProcessor:
     def __init__(self, upload_folder, base_url, thumbnail_folder):
@@ -17,9 +19,10 @@ class ZipProcessor:
 
     def process_zip(self, zip_path):
         """
-        Обрабатывает ZIP-архив: извлекает изображения, создает структуру папок
-        и обновляет базу данных.
+        Исправленная обработка ZIP-архива с сохранением оригинальной логики путей
         """
+        start_time = time.time()
+
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_basename = os.path.basename(zip_path)
@@ -29,11 +32,9 @@ class ZipProcessor:
 
                 # Очистка превью перед обработкой нового альбома
                 cleanup_album_thumbnails(album_name, self.thumbnail_folder)
-
-                # Создаем папку альбома если не существует
                 os.makedirs(album_path, exist_ok=True)
 
-                # Получаем список файлов заранее и фильтруем только изображения
+                # Фильтрация только изображений
                 allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
                 image_files = [
                     file_info for file_info in zip_ref.infolist()
@@ -41,33 +42,31 @@ class ZipProcessor:
                        os.path.splitext(file_info.filename.lower())[1] in allowed_extensions
                 ]
 
-                # Извлекаем только изображения, пропускаем служебные файлы
+                # Извлекаем все файлы
                 zip_ref.extractall(album_path, members=image_files)
 
                 files_to_insert = []
 
-                # Проходим по извлеченным файлам
+                # Обрабатываем файлы с сохранением оригинальной логики путей
                 for file_info in image_files:
                     original_file_path = os.path.join(album_path, file_info.filename)
 
-                    # Проверяем что файл действительно существует после извлечения
                     if not os.path.exists(original_file_path):
                         continue
 
-                    # Определяем артикул из пути файла в архиве
+                    # ВОССТАНАВЛИВАЕМ ОРИГИНАЛЬНУЮ ЛОГИКУ ОПРЕДЕЛЕНИЯ АРТИКУЛА
                     file_dir = os.path.dirname(file_info.filename)
                     if file_dir:
                         # Если файл в подпапке - используем имя папки как артикул
                         article_folder_raw = os.path.basename(file_dir)
                         article_folder_norm = safe_folder_name(article_folder_raw)
 
-                        # Нормализуем имя папки если нужно
+                        # Нормализуем имя папки если нужно (оригинальная логика)
                         original_dir = os.path.dirname(original_file_path)
                         normalized_dir = os.path.join(os.path.dirname(original_dir), article_folder_norm)
 
                         if original_dir != normalized_dir:
                             os.makedirs(os.path.dirname(normalized_dir), exist_ok=True)
-                            # Перемещаем файл в нормализованную папку
                             normalized_file_path = os.path.join(normalized_dir, os.path.basename(original_file_path))
                             os.rename(original_file_path, normalized_file_path)
                             original_file_path = normalized_file_path
@@ -76,7 +75,7 @@ class ZipProcessor:
                         article_folder_norm = safe_folder_name(
                             os.path.splitext(os.path.basename(original_file_path))[0])
 
-                    # Вычисляем относительный путь
+                    # Вычисляем относительный путь (оригинальная логика)
                     relative_file_path = os.path.relpath(original_file_path, self.upload_folder).replace(os.sep, '/')
                     encoded_path = quote(relative_file_path, safe='/')
                     public_link = f"{self.base_url}/images/{encoded_path}"
@@ -88,7 +87,7 @@ class ZipProcessor:
                         public_link
                     ))
 
-                # Удаляем пустые папки которые могли остаться
+                # Удаляем пустые папки
                 cleanup_empty_folders(album_path)
 
                 # Используем одну транзакцию для всех операций
@@ -100,13 +99,16 @@ class ZipProcessor:
 
                 db_manager.execute_in_transaction(operations)
 
-                logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
+                processing_time = time.time() - start_time
+                logger.info(
+                    f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files in {processing_time:.2f}s")
                 return True, album_name
 
         except Exception as e:
             logger.error(f"Error processing ZIP file {zip_path}: {e}")
             return False, str(e)
 
+    # Остальные методы без изменений
     def validate_zip_structure(self, zip_path):
         """
         Проверяет структуру ZIP-архива перед обработкой.
@@ -114,13 +116,11 @@ class ZipProcessor:
         """
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # Проверяем, что архив не пустой
                 file_list = zip_ref.namelist()
                 if not file_list:
                     logger.error("ZIP archive is empty")
                     return False
 
-                # Проверяем наличие изображений
                 allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
                 has_images = any(
                     not info.is_dir() and
@@ -158,7 +158,6 @@ class ZipProcessor:
 
                 total_size = sum(info.file_size for info in image_files)
 
-                # Определяем структуру папок
                 folders = set()
                 for info in image_files:
                     dir_path = os.path.dirname(info.filename)
