@@ -6,8 +6,6 @@ import os
 import zipfile
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
 import logging
-import re
-import unicodedata
 from urllib.parse import quote
 from PIL import Image
 import io
@@ -20,6 +18,9 @@ import atexit
 import json
 from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
+from zip_processor import ZipProcessor
+from utils import safe_folder_name, cleanup_album_thumbnails, cleanup_empty_folders
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -53,16 +54,12 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
-
-# --- Вспомогательные функции ---
-def safe_folder_name(name: str) -> str:
-    """Преобразует строку в безопасное имя папки"""
-    if not name:
-        return "unnamed"
-    name = unicodedata.normalize('NFKD', name)
-    name = re.sub(r'[^\w\s-]', '', name, flags=re.UNICODE)
-    name = re.sub(r'[-\s]+', '_', name, flags=re.UNICODE).strip('-_')
-    return name[:255] if name else "unnamed"
+# Инициализация ZipProcessor
+zip_processor = ZipProcessor(
+    upload_folder=app.config['UPLOAD_FOLDER'],
+    base_url=base_url,
+    thumbnail_folder=app.config['THUMBNAIL_FOLDER']
+)
 
 
 def generate_image_hash(file_path):
@@ -112,19 +109,6 @@ def get_thumbnail_path(original_path, size):
         return os.path.join(thumbnail_dir, thumbnail_filename)
     else:
         return os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
-
-
-def cleanup_album_thumbnails(album_name):
-    """Очищает все превью для указанного альбома"""
-    try:
-        album_thumb_path = os.path.join(app.config['THUMBNAIL_FOLDER'], album_name)
-        if os.path.exists(album_thumb_path):
-            shutil.rmtree(album_thumb_path)
-            logger.info(f"Cleaned up thumbnails for album: {album_name}")
-        else:
-            logger.info(f"No thumbnails found for album: {album_name}")
-    except Exception as e:
-        logger.error(f"Error cleaning up thumbnails for album {album_name}: {e}")
 
 
 def cleanup_file_thumbnails(filename):
@@ -196,6 +180,38 @@ def init_db():
                 db_manager.execute_query('CREATE INDEX idx_files_created_at ON files(created_at)', commit=True)
 
                 logger.info("Table 'files' created successfully")
+
+            # Проверяем существование таблицы логов действий пользователей
+            result_logs = db_manager.execute_query("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'user_actions_log'
+                );
+            """, fetch=True)
+
+            logs_table_exists = result_logs[0]['exists'] if result_logs else False
+
+            if not logs_table_exists:
+                logger.warning("Table 'user_actions_log' does not exist. Creating...")
+                db_manager.execute_query('''
+                    CREATE TABLE user_actions_log (
+                        id SERIAL PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        username TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        resource_type TEXT,
+                        resource_name TEXT,
+                        details JSONB,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''', commit=True)
+
+                # Создаем индексы для логов
+                db_manager.execute_query('CREATE INDEX idx_user_actions_user_id ON user_actions_log(user_id)', commit=True)
+                db_manager.execute_query('CREATE INDEX idx_user_actions_action ON user_actions_log(action)', commit=True)
+                db_manager.execute_query('CREATE INDEX idx_user_actions_timestamp ON user_actions_log(timestamp)', commit=True)
+
+                logger.info("Table 'user_actions_log' created successfully")
 
             logger.info("Database initialized successfully")
             return
@@ -334,80 +350,6 @@ def sync_db_with_filesystem():
         raise
 
 
-# Обработка ZIP-архива
-def process_zip(zip_path):
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_basename = os.path.basename(zip_path)
-            album_name_raw = os.path.splitext(zip_basename)[0]
-            album_name = safe_folder_name(album_name_raw)
-
-            # Очистка превью перед обработкой нового альбома
-            cleanup_album_thumbnails(album_name)
-
-            album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
-            os.makedirs(album_path, exist_ok=True)
-
-            # Извлечение архива
-            zip_ref.extractall(album_path)
-
-            allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
-            files_to_insert = []
-
-            # Собираем все данные для вставки
-            for root, dirs, files in os.walk(album_path):
-                rel_root = os.path.relpath(root, album_path)
-                if rel_root == '.':
-                    continue
-
-                if rel_root.count(os.sep) == 0:
-                    article_folder_raw = os.path.basename(root)
-                    article_folder_norm = safe_folder_name(article_folder_raw)
-
-                    original_article_path = root
-                    normalized_article_path = os.path.join(os.path.dirname(root), article_folder_norm)
-                    if original_article_path != normalized_article_path:
-                        os.rename(original_article_path, normalized_article_path)
-                        root = normalized_article_path
-
-                    if files:
-                        for file_name in files:
-                            file_path = os.path.join(root, file_name)
-                            if os.path.isfile(file_path):
-                                _, ext = os.path.splitext(file_name.lower())
-                                if ext not in allowed_extensions:
-                                    logger.info(f"Skipping non-image file: {file_path}")
-                                    continue
-
-                                relative_file_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER']).replace(
-                                    os.sep, '/')
-                                encoded_path = quote(relative_file_path, safe='/')
-                                public_link = f"{base_url}/images/{encoded_path}"
-
-                                files_to_insert.append((
-                                    relative_file_path,
-                                    album_name,
-                                    article_folder_norm,
-                                    public_link
-                                ))
-
-            # Используем одну транзакцию для всех операций
-            operations = [
-                ("DELETE FROM files WHERE album_name = %s", (album_name,)),
-                ("""INSERT INTO files (filename, album_name, article_number, public_link) 
-                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)  # True указывает на executemany
-            ]
-
-            db_manager.execute_in_transaction(operations)
-
-            logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
-            return True
-
-    except Exception as e:
-        logger.error(f"Error processing ZIP file {zip_path}: {e}")
-        return False
-
-
 def log_user_action(action, resource_type=None, resource_name=None, details=None):
     """
     Записывает действие пользователя в базу данных.
@@ -480,7 +422,7 @@ def api_sync():
 def api_cleanup_thumbnails(album_name):
     """Принудительная очистка превью для альбома"""
     try:
-        cleanup_album_thumbnails(album_name)
+        cleanup_album_thumbnails(album_name, app.config['THUMBNAIL_FOLDER'])
         return jsonify({'message': f'Thumbnails for album {album_name} cleaned up successfully'})
     except Exception as e:
         logger.error(f"Error cleaning up thumbnails for {album_name}: {e}")
@@ -508,14 +450,17 @@ def upload_zip():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_zip_name)
         file.save(file_path)
 
-        success = process_zip(file_path)
+        # Используем zip_processor для обработки ZIP файла
+        success, result = zip_processor.process_zip(file_path)
 
         if success:
             os.remove(file_path)
             log_user_action('upload', 'album', safe_zip_name)
-            return jsonify({'message': 'Files uploaded successfully', 'album_name': safe_folder_name(name_without_ext)})
+            return jsonify({'message': 'Files uploaded successfully', 'album_name': result})
         else:
-            return jsonify({'error': 'Failed to process ZIP file'}), 500
+            # Удаляем ZIP файл в случае ошибки
+            os.remove(file_path)
+            return jsonify({'error': f'Failed to process ZIP file: {result}'}), 500
 
 
 # API: список всех файлов
@@ -833,7 +778,7 @@ def api_delete_album(album_name):
             logger.info(f"Deleted album directory: {album_path}")
 
         # Удаляем превью альбома
-        cleanup_album_thumbnails(album_name)
+        cleanup_album_thumbnails(album_name, app.config['THUMBNAIL_FOLDER'])
 
         # Удаляем папку превью если осталась
         if os.path.exists(thumbnail_album_path):
