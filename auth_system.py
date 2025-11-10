@@ -1,13 +1,13 @@
 # auth_system.py
 
-from flask import session, redirect, url_for, request, flash, render_template # Добавлен render_template
+from flask import session, redirect, url_for, request, render_template
 from functools import wraps
 import base64
 import json
 import secrets
 import os
 from authlib.integrations.flask_client import OAuth
-from utils import log_user_login, log_user_logout  # Добавлен импорт
+from utils import log_user_login, log_user_logout
 
 
 class AuthManager:
@@ -214,7 +214,6 @@ class AuthManager:
             <a href="/login">Попробовать снова</a>
             ''', 400
 
-
     def _handle_logout(self):
         """Обработка выхода с переходом на /hello"""
         try:
@@ -243,6 +242,7 @@ class AuthManager:
             session.clear()
             # При ошибке тоже редиректим на /hello
             return redirect(url_for('hello'))
+
 
 
     def _decode_jwt_payload(self, token):

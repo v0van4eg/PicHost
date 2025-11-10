@@ -78,7 +78,36 @@ def cleanup_file_thumbnails(filename, upload_folder, thumbnail_folder):
         logger.error(f"Error cleaning up thumbnails for file {filename}: {e}")
 
 
-def log_user_action(action, resource_type=None, resource_name=None, details=None, user=None):
+def get_client_info():
+    """
+    Получает информацию о клиенте из текущего запроса
+    """
+    try:
+        from flask import request
+        client_ip = request.environ.get('HTTP_X_REAL_IP',
+                                        request.environ.get('HTTP_X_FORWARDED_FOR',
+                                                            request.remote_addr))
+
+        # Если IP представляет собой список (когда несколько прокси), берем первый
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+
+        user_agent = request.headers.get('User-Agent', 'Unknown')
+
+        return {
+            'ip_address': client_ip
+            # 'full_name': "Фамилия Имя"
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting client info: {e}")
+        return {
+            'ip_address': 'Unknown',
+            'user_agent': 'Unknown'
+        }
+
+
+def log_user_action(action, resource_type=None, resource_name=None, details=None, user=None, request_info=None):
     """
     Записывает действие пользователя в базу данных.
 
@@ -87,6 +116,7 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
     :param resource_name: str - Имя ресурса
     :param details: dict - Дополнительные детали (будет сериализовано в JSON)
     :param user: dict - Объект пользователя (если None, будет использован текущий пользователь из сессии)
+    :param request_info: dict - Информация о запросе (если None, будет получена автоматически)
     """
     if user is None:
         from auth_system import get_current_user
@@ -100,7 +130,17 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
         user_id = user.get('sub')  # Используем уникальный идентификатор пользователя из OIDC
         username = user.get('name', user.get('preferred_username', 'unknown_user'))
 
-    details_json = json.dumps(details) if details else None
+    # Получаем информацию о клиенте, если не предоставлена
+    if request_info is None:
+        request_info = get_client_info()
+
+    # Объединяем детали с информацией о запросе
+    if details is None:
+        details = {}
+
+    details.update(request_info)
+
+    details_json = json.dumps(details, ensure_ascii=False) if details else None
 
     query = """
     INSERT INTO user_actions_log (user_id, username, action, resource_type, resource_name, details)
@@ -126,34 +166,41 @@ def log_user_login(user_info, login_method='oauth'):
     username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
 
     details = {
-        'login_method': login_method,
-        'user_agent': request.headers.get('User-Agent', 'Unknown') if 'request' in globals() else 'Unknown',
-        'ip_address': request.remote_addr if 'request' in globals() and hasattr(request, 'remote_addr') else 'Unknown',
-        'roles': user_info.get('roles', []),
-        'display_roles': user_info.get('display_roles', [])
+        # 'login_method': login_method,
+        # 'roles': user_info.get('roles', []),
+        # 'display_roles': user_info.get('display_roles', []),
+        'given_name': user_info.get('given_name', ''),
+        'family_name': user_info.get('family_name', ''),
+        'email': user_info.get('email', '')
     }
 
     log_user_action(
         action='login',
-        resource_type='user',
+        resource_type='Пользователь',
         resource_name=username,
         details=details,
-        user=user_info
+        user=user_info.get('ip_address')
     )
 
 
 def log_user_logout(user_info):
     """
     Специальная функция для логирования выхода пользователя
-
     :param user_info: dict - Информация о пользователе
     """
     user_id = user_info.get('sub')
     username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
 
+    details = {
+        'given_name': user_info.get('given_name', ''),
+        'family_name': user_info.get('family_name', ''),
+        'email': user_info.get('email', '')
+    }
+
     log_user_action(
         action='logout',
         resource_type='user',
         resource_name=username,
+        details=details,
         user=user_info
     )

@@ -441,7 +441,11 @@ def upload_zip():
 
         if success:
             os.remove(file_path)
-            log_user_action('upload', 'album', original_name)
+            # log_user_action('upload', 'album', original_name)
+            log_user_action('upload', 'album', original_name, {
+                'file_count': len(uploaded_files),
+                'album_size': total_size
+            })
             return jsonify({'message': 'Files uploaded successfully', 'album_name': result})
         else:
             # Удаляем ZIP файл в случае ошибки
