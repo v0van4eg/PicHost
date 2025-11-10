@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # zip_processor.py - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
 
 import os
@@ -229,3 +230,180 @@ class ZipProcessor:
         except Exception as e:
             logger.error(f"Error getting ZIP info: {e}")
             return None
+=======
+# zip_processor.py
+import os
+import zipfile
+import logging
+from urllib.parse import quote
+from database import db_manager  # Предполагаем, что db_manager доступен
+import unicodedata
+import re
+import time
+
+logger = logging.getLogger(__name__)
+
+class ZipProcessor:
+    def __init__(self, upload_folder, base_url, db_manager_instance, update_progress_func,
+                 get_file_structure_func, cleanup_album_thumbnails_func, cleanup_file_thumbnails_func,
+                 get_all_files_func, sync_db_with_filesystem_func):
+        self.upload_folder = upload_folder
+        self.base_url = base_url
+        self.db_manager = db_manager_instance
+        self.update_extraction_progress = update_progress_func # Функция обновления прогресса из app.py
+        # Передаём зависимости из app.py
+        self.get_file_structure = get_file_structure_func
+        self.cleanup_album_thumbnails = cleanup_album_thumbnails_func
+        self.cleanup_file_thumbnails = cleanup_file_thumbnails_func
+        self.get_all_files = get_all_files_func
+        self.sync_db_with_filesystem = sync_db_with_filesystem_func
+
+    def safe_folder_name(self, name: str) -> str:
+        """Преобразует строку в безопасное имя папки"""
+        if not name:
+            return "unnamed"
+        name = unicodedata.normalize('NFKD', name)
+        name = re.sub(r'[^\w\s-]', '', name, flags=re.UNICODE)
+        name = re.sub(r'[-\s]+', '_', name, flags=re.UNICODE).strip('-_')
+        return name[:255] if name else "unnamed"
+
+    def cleanup_empty_folders(self, folder_path):
+        """Рекурсивно удаляет пустые папки"""
+        try:
+            for root, dirs, files in os.walk(folder_path, topdown=False):
+                for dir_name in dirs:
+                    dir_path = os.path.join(root, dir_name)
+                    try:
+                        if not os.listdir(dir_path): # Папка пуста
+                            os.rmdir(dir_path)
+                            logger.debug(f"Removed empty folder: {dir_path}")
+                    except OSError:
+                        pass # Папка не пуста или нет прав
+        except Exception as e:
+            logger.error(f"Error cleaning up empty folders in {folder_path}: {e}")
+
+    def validate_zip_file(self, file_storage):
+        """Проверяет валидность ZIP-файла"""
+        try:
+            # Проверяем расширение
+            if not file_storage.filename.lower().endswith('.zip'):
+                return False, "Файл должен быть в формате ZIP"
+
+            # Проверяем сигнатуру ZIP-файла
+            file_storage.stream.seek(0)
+            signature = file_storage.stream.read(4)
+            file_storage.stream.seek(0)
+            if signature != b'PK\x03\x04':
+                return False, "Некорректный формат ZIP-файла"
+            return True, "OK"
+        except Exception as e:
+            logger.error(f"Error validating ZIP file: {e}")
+            return False, f"Ошибка проверки файла: {str(e)}"
+
+    def save_uploaded_zip(self, file_storage):
+        """Сохраняет загруженный ZIP-файл во временную папку"""
+        try:
+            original_name = file_storage.filename
+            base_name = os.path.basename(original_name)
+            name_without_ext, _ = os.path.splitext(base_name)
+            safe_zip_name = self.safe_folder_name(name_without_ext) + '.zip'
+            file_path = os.path.join(self.upload_folder, safe_zip_name)
+            file_storage.save(file_path)
+            return file_path, safe_zip_name
+        except Exception as e:
+            logger.error(f"Error saving uploaded ZIP: {e}")
+            return None, None
+
+    # --- Новый метод для обработки ZIP с прогрессом ---
+    def process_zip_with_progress(self, zip_path, session_id):
+        """Обрабатывает ZIP-архив с отслеживанием прогресса"""
+        try:
+            # Импортируем функции, спефичные для app.py, если они не переданы как зависимости
+            # или не находятся в том же модуле
+            # from app import get_file_structure, cleanup_album_thumbnails, cleanup_file_thumbnails, \
+            #              get_all_files, sync_db_with_filesystem, safe_folder_name # Импорт safe_folder_name из app.py
+
+            # Убран импорт, используем переданные зависимости
+            # from app import safe_folder_name # Импорт из app.py больше не нужен, используем self.safe_folder_name
+
+            self.update_extraction_progress(session_id, 0, 0, 'Начало обработки архива...')
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_basename = os.path.basename(zip_path)
+                album_name_raw = os.path.splitext(zip_basename)[0]
+                # album_name = safe_folder_name(album_name_raw) # Используем версию из app.py для согласованности
+                album_name = self.safe_folder_name(album_name_raw) # Используем версию из ZipProcessor
+
+                # Очистка превью перед обработкой нового альбома
+                self.cleanup_album_thumbnails(album_name) # Вызов из переданной зависимости
+                album_path = os.path.join(self.upload_folder, album_name)
+                os.makedirs(album_path, exist_ok=True)
+
+                # Получаем список файлов для извлечения
+                file_list = [f for f in zip_ref.infolist() if not f.is_dir()]
+                total_files = len(file_list)
+                # self.update_extraction_progress(session_id, 0, total_files, f'Найдено {total_files} файлов для обработки')
+                # time.sleep(0.1) # Убрана задержка из обновления прогресса
+
+                allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
+                files_to_insert = []
+                extracted_count = 0
+
+                # Извлечение архива с отслеживанием прогресса
+                for i, file_info in enumerate(file_list):
+                    try:
+                        # Пропускаем не-изображения
+                        _, ext = os.path.splitext(file_info.filename.lower())
+                        if ext not in allowed_extensions:
+                            continue
+
+                        # Извлекаем файл
+                        zip_ref.extract(file_info, album_path)
+                        extracted_count += 1
+
+                        # Обновляем прогресс каждые 5 файлов или для последнего файла
+                        if extracted_count % 5 == 0 or i == len(file_list) - 1:
+                            progress_percent = int((extracted_count / total_files) * 100)
+                            self.update_extraction_progress(session_id,
+                                                            extracted_count,
+                                                            total_files,
+                                                            f'Распаковано {extracted_count}/{total_files} файлов ({progress_percent}%)')
+                            # time.sleep(0.1) # Убрана задержка из обновления прогресса
+
+                    except Exception as e:
+                        logger.error(f"Error extracting {file_info.filename}: {e}")
+                        continue # Продолжаем с другими файлами
+
+                # Обработка структуры папок и файлов
+                # album_structure = get_file_structure(album_path, album_name) # Вызов из app.py
+                album_structure = self.get_file_structure(album_path, album_name) # Вызов из переданной зависимости
+                files_to_insert = album_structure['files']
+
+                # --- Анализ файловой системы и синхронизация БД ---
+                time.sleep(0.5) # Искусственная задержка перед анализом
+                # fs_files = get_all_files() # Вызов из app.py
+                fs_files = self.get_all_files() # Вызов из переданной зависимости
+                # files_to_delete, files_to_add = sync_db_with_filesystem(fs_files, files_to_insert) # Вызов из app.py
+                files_to_delete, files_to_add = self.sync_db_with_filesystem(fs_files, files_to_insert) # Вызов из переданной зависимости
+
+                # --- Очистка превью для удаленных файлов ---
+                for rel_path in files_to_delete:
+                    # cleanup_file_thumbnails(rel_path) # Вызов из app.py
+                    self.cleanup_file_thumbnails(rel_path) # Вызов из переданной зависимости
+
+                # --- Финальное обновление прогресса ---
+                self.update_extraction_progress(session_id,
+                                                total_files,
+                                                total_files,
+                                                f'Готово! Обработано {len(files_to_insert)} файлов',
+                                                is_complete=True)
+                # time.sleep(0.1) # Убрана задержка из обновления прогресса
+                time.sleep(1) # Искусственная задержка перед завершением
+
+                logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error processing ZIP file {zip_path}: {e}")
+            self.update_extraction_progress(session_id, 0, 0, f'Ошибка: {str(e)}', is_complete=True)
+            return False
+>>>>>>> 0a7af61 (Вынесение zip_processor в модуль)
