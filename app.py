@@ -54,11 +54,12 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
-# Создаем экземпляр ZipProcessor после инициализации app
+
 zip_processor = ZipProcessor(
     app.config['UPLOAD_FOLDER'],
     base_url,
-    app.config['THUMBNAIL_FOLDER']
+    app.config['THUMBNAIL_FOLDER'],
+    max_workers=8  # Можно настроить под вашу нагрузку
 )
 
 # --- Вспомогательные функции ---
