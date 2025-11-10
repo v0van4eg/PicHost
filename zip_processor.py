@@ -96,7 +96,7 @@ class ZipProcessor:
                     ("""INSERT INTO files (filename, album_name, article_number, public_link) 
                         VALUES (%s, %s, %s, %s)""", files_to_insert, True)
                 ]
-
+                logger.info(f"Вызываем транзакцию")
                 db_manager.execute_in_transaction(operations)
 
                 processing_time = time.time() - start_time
@@ -108,7 +108,6 @@ class ZipProcessor:
             logger.error(f"Error processing ZIP file {zip_path}: {e}")
             return False, str(e)
 
-    # Остальные методы без изменений
     def validate_zip_structure(self, zip_path):
         """
         Проверяет структуру ZIP-архива перед обработкой.

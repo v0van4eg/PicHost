@@ -163,6 +163,7 @@ class DatabaseManager:
         """
         conn = None
         cursor = None
+        logger.info(f"Запускаем транзакцию с {len(operations)} операциями")
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -178,7 +179,7 @@ class DatabaseManager:
                     cursor.execute(query, params)
 
             conn.commit()
-            logger.info(f"Transaction completed: {len(operations)} operations")
+            logger.info(f"Транзакция успешна: {len(operations)} operations")
             return True
 
         except Exception as e:
