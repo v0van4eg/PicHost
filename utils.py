@@ -43,3 +43,30 @@ def cleanup_empty_folders(folder_path):
                     pass  # Папка не пуста или нет прав
     except Exception as e:
         logger.error(f"Error cleaning up empty folders in {folder_path}: {e}")
+
+def cleanup_file_thumbnails(filename, upload_folder, thumbnail_folder):
+    """Очищает превью для конкретного файла"""
+    try:
+        original_path = os.path.join(upload_folder, filename)
+        if not os.path.exists(original_path):
+            # Если оригинального файла нет, ищем и удаляем все возможные превью
+            rel_dir = os.path.dirname(filename)
+            file_base = os.path.splitext(os.path.basename(filename))[0]
+
+            if rel_dir and rel_dir != '.':
+                thumb_dir = os.path.join(thumbnail_folder, rel_dir)
+                if os.path.exists(thumb_dir):
+                    # Удаляем все превью для этого файла
+                    for thumb_file in os.listdir(thumb_dir):
+                        if thumb_file.startswith(file_base + '_'):
+                            thumb_path = os.path.join(thumb_dir, thumb_file)
+                            os.remove(thumb_path)
+                            logger.info(f"Deleted orphaned thumbnail: {thumb_path}")
+        else:
+            # Удаляем превью для существующего файла
+            # Для этого нужно обновить get_thumbnail_path чтобы принимать параметры
+            # Временно оставляем как есть, можно доработать позже
+            pass
+
+    except Exception as e:
+        logger.error(f"Error cleaning up thumbnails for file {filename}: {e}")

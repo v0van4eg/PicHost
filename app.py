@@ -20,7 +20,7 @@ from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
 from zip_processor import ZipProcessor
 from utils import safe_folder_name, cleanup_album_thumbnails, cleanup_empty_folders
-
+from sync_manager import SyncManager
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -56,6 +56,12 @@ base_url = f"http://{domain}"
 
 # Инициализация ZipProcessor
 zip_processor = ZipProcessor(
+    upload_folder=app.config['UPLOAD_FOLDER'],
+    base_url=base_url,
+    thumbnail_folder=app.config['THUMBNAIL_FOLDER']
+)
+
+sync_manager = SyncManager(
     upload_folder=app.config['UPLOAD_FOLDER'],
     base_url=base_url,
     thumbnail_folder=app.config['THUMBNAIL_FOLDER']
@@ -207,9 +213,12 @@ def init_db():
                 ''', commit=True)
 
                 # Создаем индексы для логов
-                db_manager.execute_query('CREATE INDEX idx_user_actions_user_id ON user_actions_log(user_id)', commit=True)
-                db_manager.execute_query('CREATE INDEX idx_user_actions_action ON user_actions_log(action)', commit=True)
-                db_manager.execute_query('CREATE INDEX idx_user_actions_timestamp ON user_actions_log(timestamp)', commit=True)
+                db_manager.execute_query('CREATE INDEX idx_user_actions_user_id ON user_actions_log(user_id)',
+                                         commit=True)
+                db_manager.execute_query('CREATE INDEX idx_user_actions_action ON user_actions_log(action)',
+                                         commit=True)
+                db_manager.execute_query('CREATE INDEX idx_user_actions_timestamp ON user_actions_log(timestamp)',
+                                         commit=True)
 
                 logger.info("Table 'user_actions_log' created successfully")
 
@@ -252,102 +261,131 @@ def get_all_files():
 
 
 # Синхронизация БД с файловой системой
-def sync_db_with_filesystem():
-    """
-    Синхронизирует базу данных с файловой системой в одной транзакции.
-    """
+# def sync_db_with_filesystem():
+#     """
+#     Синхронизирует базу данных с файловой системой в одной транзакции.
+#     """
+#     try:
+#         # Получаем все файлы из БД в одном запросе
+#         db_files_result = db_manager.execute_query(
+#             "SELECT filename, album_name, article_number, public_link FROM files",
+#             fetch=True
+#         )
+#         db_files = {row['filename']: {
+#             'album_name': row['album_name'],
+#             'article_number': row['article_number'],
+#             'public_link': row['public_link']
+#         } for row in db_files_result} if db_files_result else {}
+#
+#         # Сканируем файловую систему
+#         fs_files = {}
+#         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
+#
+#         for root, dirs, files in os.walk(app.config['UPLOAD_FOLDER']):
+#             for file in files:
+#                 _, ext = os.path.splitext(file.lower())
+#                 if ext in allowed_extensions:
+#                     full_path = os.path.join(root, file)
+#                     rel_path = os.path.relpath(full_path, app.config['UPLOAD_FOLDER']).replace(os.sep, '/')
+#
+#                     # Определяем альбом и артикул из пути
+#                     path_parts = rel_path.split('/')
+#                     if len(path_parts) >= 1:
+#                         album_name = path_parts[0]
+#
+#                         # Если файл находится в подпапке (артикуле)
+#                         if len(path_parts) >= 3:
+#                             article_number = path_parts[1]
+#                         else:
+#                             # Если файл напрямую в альбоме, используем имя файла без расширения как артикул
+#                             article_number = os.path.splitext(file)[0]
+#
+#                         # Обеспечиваем безопасные имена
+#                         album_name = safe_folder_name(album_name)
+#                         article_number = safe_folder_name(article_number)
+#
+#                         encoded_path = quote(rel_path, safe='/')
+#                         public_link = f"{base_url}/images/{encoded_path}"
+#
+#                         fs_files[rel_path] = {
+#                             'album_name': album_name,
+#                             'article_number': article_number,
+#                             'public_link': public_link
+#                         }
+#
+#         # Находим файлы для удаления и добавления
+#         files_to_delete = set(db_files.keys()) - set(fs_files.keys())
+#         files_to_add = set(fs_files.keys()) - set(db_files.keys())
+#
+#         # Подготавливаем операции для транзакции
+#         operations = []
+#
+#         # Операция удаления
+#         if files_to_delete:
+#             delete_query = "DELETE FROM files WHERE filename = ANY(%s)"
+#             operations.append((delete_query, (list(files_to_delete),)))
+#
+#         # Операция вставки
+#         if files_to_add:
+#             insert_data = []
+#             for rel_path in files_to_add:
+#                 file_info = fs_files[rel_path]
+#                 insert_data.append((
+#                     rel_path,
+#                     file_info['album_name'],
+#                     file_info['article_number'],
+#                     file_info['public_link']
+#                 ))
+#
+#             insert_query = """
+#                 INSERT INTO files (filename, album_name, article_number, public_link)
+#                 VALUES (%s, %s, %s, %s)
+#             """
+#             operations.append((insert_query, insert_data, True))  # True для executemany
+#
+#         # Выполняем все операции в одной транзакции
+#         if operations:
+#             db_manager.execute_in_transaction(operations)
+#
+#         # Очищаем превью для удаленных файлов (вне транзакции, так как это файловые операции)
+#         for rel_path in files_to_delete:
+#             cleanup_file_thumbnails(rel_path)
+#
+#         logger.info(f"Sync completed: deleted {len(files_to_delete)} records, added {len(files_to_add)} records")
+#         return list(files_to_delete), list(files_to_add)
+#
+#     except Exception as e:
+#         logger.error(f"Error in sync_db_with_filesystem: {e}")
+#         raise
+
+
+# Эндпоинт синхронизации БД (обновленный)
+@app.route('/api/sync', methods=['GET'])
+@login_required
+def api_sync():
     try:
-        # Получаем все файлы из БД в одном запросе
-        db_files_result = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link FROM files",
-            fetch=True
-        )
-        db_files = {row['filename']: {
-            'album_name': row['album_name'],
-            'article_number': row['article_number'],
-            'public_link': row['public_link']
-        } for row in db_files_result} if db_files_result else {}
-
-        # Сканируем файловую систему
-        fs_files = {}
-        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
-
-        for root, dirs, files in os.walk(app.config['UPLOAD_FOLDER']):
-            for file in files:
-                _, ext = os.path.splitext(file.lower())
-                if ext in allowed_extensions:
-                    full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, app.config['UPLOAD_FOLDER']).replace(os.sep, '/')
-
-                    # Определяем альбом и артикул из пути
-                    path_parts = rel_path.split('/')
-                    if len(path_parts) >= 1:
-                        album_name = path_parts[0]
-
-                        # Если файл находится в подпапке (артикуле)
-                        if len(path_parts) >= 3:
-                            article_number = path_parts[1]
-                        else:
-                            # Если файл напрямую в альбоме, используем имя файла без расширения как артикул
-                            article_number = os.path.splitext(file)[0]
-
-                        # Обеспечиваем безопасные имена
-                        album_name = safe_folder_name(album_name)
-                        article_number = safe_folder_name(article_number)
-
-                        encoded_path = quote(rel_path, safe='/')
-                        public_link = f"{base_url}/images/{encoded_path}"
-
-                        fs_files[rel_path] = {
-                            'album_name': album_name,
-                            'article_number': article_number,
-                            'public_link': public_link
-                        }
-
-        # Находим файлы для удаления и добавления
-        files_to_delete = set(db_files.keys()) - set(fs_files.keys())
-        files_to_add = set(fs_files.keys()) - set(db_files.keys())
-
-        # Подготавливаем операции для транзакции
-        operations = []
-
-        # Операция удаления
-        if files_to_delete:
-            delete_query = "DELETE FROM files WHERE filename = ANY(%s)"
-            operations.append((delete_query, (list(files_to_delete),)))
-
-        # Операция вставки
-        if files_to_add:
-            insert_data = []
-            for rel_path in files_to_add:
-                file_info = fs_files[rel_path]
-                insert_data.append((
-                    rel_path,
-                    file_info['album_name'],
-                    file_info['article_number'],
-                    file_info['public_link']
-                ))
-
-            insert_query = """
-                INSERT INTO files (filename, album_name, article_number, public_link) 
-                VALUES (%s, %s, %s, %s)
-            """
-            operations.append((insert_query, insert_data, True))  # True для executemany
-
-        # Выполняем все операции в одной транзакции
-        if operations:
-            db_manager.execute_in_transaction(operations)
-
-        # Очищаем превью для удаленных файлов (вне транзакции, так как это файловые операции)
-        for rel_path in files_to_delete:
-            cleanup_file_thumbnails(rel_path)
-
-        logger.info(f"Sync completed: deleted {len(files_to_delete)} records, added {len(files_to_add)} records")
-        return list(files_to_delete), list(files_to_add)
-
+        deleted, added = sync_manager.sync()
+        return jsonify({
+            'message': 'Synchronization completed successfully',
+            'deleted': deleted,
+            'added': added
+        })
     except Exception as e:
-        logger.error(f"Error in sync_db_with_filesystem: {e}")
-        raise
+        logger.error(f"Error in sync endpoint: {e}")
+        return jsonify({'error': f'Synchronization failed: {str(e)}'}), 500
+
+
+# Новый эндпоинт для статистики синхронизации
+@app.route('/api/sync/stats', methods=['GET'])
+@login_required
+def api_sync_stats():
+    """Возвращает статистику синхронизации"""
+    try:
+        stats = sync_manager.get_sync_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting sync stats: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 def log_user_action(action, resource_type=None, resource_name=None, details=None):
@@ -398,22 +436,6 @@ def index():
 @app.route('/hello')
 def hello():
     return render_template('hello.html', base_url=base_url)
-
-
-# Эндпоинт синхронизации БД
-@app.route('/api/sync', methods=['GET'])
-@login_required
-def api_sync():
-    try:
-        deleted, added = sync_db_with_filesystem()
-        return jsonify({
-            'message': 'Synchronization completed successfully',
-            'deleted': deleted,
-            'added': added
-        })
-    except Exception as e:
-        logger.error(f"Error in sync endpoint: {e}")
-        return jsonify({'error': f'Synchronization failed: {str(e)}'}), 500
 
 
 # Эндпоинт для принудительной очистки превью альбома
@@ -835,7 +857,7 @@ def api_delete_article(album_name, article_name):
             logger.info(f"Deleted article thumbnails directory: {thumbnail_article_path}")
 
         # Синхронизируем БД после удаления
-        sync_db_with_filesystem()
+        # sync_manager.sync()
         log_user_action('delete_article', 'article', f"{album_name}/{article_name}",
                         {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
         return jsonify({'message': f'Артикул "{article_name}" в альбоме "{album_name}" успешно удален'})
