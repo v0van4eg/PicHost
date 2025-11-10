@@ -6,6 +6,11 @@ import os
 import zipfile
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
 import logging
+import re
+import unicodedata
+from urllib.parse import quote
+from PIL import Image
+import io
 import hashlib
 import shutil
 from openpyxl import Workbook
@@ -15,10 +20,6 @@ import atexit
 import json
 from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
-from zip_processor import ZipProcessor
-from utils import safe_folder_name, cleanup_album_thumbnails, cleanup_empty_folders  # Импорт из utils
-from PIL import Image
-import io
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -27,30 +28,43 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
 auth_manager.init_app(app)
+
 # Регистрация маршрутов аутентификации
 auth_manager.register_routes()
+
 # Добавление контекстного процессора
 app.context_processor(auth_context_processor)
+
 app.config['UPLOAD_FOLDER'] = 'images'
 app.config['THUMBNAIL_FOLDER'] = 'thumbnails'
 app.config['THUMBNAIL_SIZE'] = (120, 120)  # Размер превью
 app.config['PREVIEW_SIZE'] = (400, 400)  # Размер для предпросмотра
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 * 1024  # 16GB
+
 # Создаем папки если их нет
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['THUMBNAIL_FOLDER'], exist_ok=True)
+
 # Логирование
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
 # Конфигурация домена и базового URL получаем из переменных окружения
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
-# Инициализация процессора ZIP
-zip_processor = ZipProcessor(app.config['UPLOAD_FOLDER'], base_url, app.config['THUMBNAIL_FOLDER'])
-
 
 # --- Вспомогательные функции ---
+def safe_folder_name(name: str) -> str:
+    """Преобразует строку в безопасное имя папки"""
+    if not name:
+        return "unnamed"
+    name = unicodedata.normalize('NFKD', name)
+    name = re.sub(r'[^\w\s-]', '', name, flags=re.UNICODE)
+    name = re.sub(r'[-\s]+', '_', name, flags=re.UNICODE).strip('-_')
+    return name[:255] if name else "unnamed"
+
+
 def generate_image_hash(file_path):
     """Генерирует хэш для файла для кэширования"""
     try:
@@ -98,6 +112,19 @@ def get_thumbnail_path(original_path, size):
         return os.path.join(thumbnail_dir, thumbnail_filename)
     else:
         return os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
+
+
+def cleanup_album_thumbnails(album_name):
+    """Очищает все превью для указанного альбома"""
+    try:
+        album_thumb_path = os.path.join(app.config['THUMBNAIL_FOLDER'], album_name)
+        if os.path.exists(album_thumb_path):
+            shutil.rmtree(album_thumb_path)
+            logger.info(f"Cleaned up thumbnails for album: {album_name}")
+        else:
+            logger.info(f"No thumbnails found for album: {album_name}")
+    except Exception as e:
+        logger.error(f"Error cleaning up thumbnails for album {album_name}: {e}")
 
 
 def cleanup_file_thumbnails(filename):
@@ -185,8 +212,38 @@ def init_db():
 
 # Получение списка альбомов
 def get_albums():
-    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
-    return [album['album_name'] for album in results] if results else []
+    try:
+        results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
+        logger.info(f"Raw albums query results: {results}")
+
+        if results:
+            albums = []
+            for album in results:
+                # Проверяем наличие ключа и логируем структуру
+                logger.info(f"Album record structure: {album}")
+                if 'album_name' in album:
+                    albums.append(album['album_name'])
+                else:
+                    logger.warning(f"Missing 'album_name' key in record: {album}")
+            return albums
+        else:
+            logger.info("No albums found in database")
+            return []
+    except Exception as e:
+        logger.error(f"Error in get_albums: {e}")
+        return []
+
+@app.route('/api/albums')
+@login_required
+def api_albums():
+    logger.info("API albums endpoint called")
+    try:
+        albums = get_albums()
+        logger.info(f"Returning albums: {albums}")
+        return jsonify(albums)
+    except Exception as e:
+        logger.error(f"Error in api_albums: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # Получение списка артикулов для указанного альбома
@@ -307,6 +364,112 @@ def sync_db_with_filesystem():
         raise
 
 
+# Обработка ZIP-архива
+def process_zip(zip_path):
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_basename = os.path.basename(zip_path)
+            album_name_raw = os.path.splitext(zip_basename)[0]
+            album_name = safe_folder_name(album_name_raw)
+            album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
+
+            # Очистка превью перед обработкой нового альбома
+            cleanup_album_thumbnails(album_name)
+
+            # Создаем папку альбома если не существует
+            os.makedirs(album_path, exist_ok=True)
+
+            # ОПТИМИЗАЦИЯ 1: Получаем список файлов заранее и фильтруем только изображения
+            allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
+            image_files = [
+                file_info for file_info in zip_ref.infolist()
+                if not file_info.is_dir() and
+                   os.path.splitext(file_info.filename.lower())[1] in allowed_extensions
+            ]
+
+            # ОПТИМИЗАЦИЯ 2: Извлекаем только изображения, пропускаем служебные файлы
+            zip_ref.extractall(album_path, members=image_files)
+
+            files_to_insert = []
+
+            # ОПТИМИЗАЦИЯ 3: Проходим по извлеченным файлам, а не по всей файловой системе
+            for file_info in image_files:
+                original_file_path = os.path.join(album_path, file_info.filename)
+
+                # Проверяем что файл действительно существует после извлечения
+                if not os.path.exists(original_file_path):
+                    continue
+
+                # ОПТИМИЗАЦИЯ 4: Определяем артикул из пути файла в архиве
+                file_dir = os.path.dirname(file_info.filename)
+                if file_dir:
+                    # Если файл в подпапке - используем имя папки как артикул
+                    article_folder_raw = os.path.basename(file_dir)
+                    article_folder_norm = safe_folder_name(article_folder_raw)
+
+                    # ОПТИМИЗАЦИЯ 5: Нормализуем имя папки если нужно
+                    original_dir = os.path.dirname(original_file_path)
+                    normalized_dir = os.path.join(os.path.dirname(original_dir), article_folder_norm)
+
+                    if original_dir != normalized_dir:
+                        os.makedirs(os.path.dirname(normalized_dir), exist_ok=True)
+                        # Перемещаем файл в нормализованную папку
+                        normalized_file_path = os.path.join(normalized_dir, os.path.basename(original_file_path))
+                        os.rename(original_file_path, normalized_file_path)
+                        original_file_path = normalized_file_path
+                else:
+                    # Если файл в корне альбома - используем имя файла без расширения как артикул
+                    article_folder_norm = safe_folder_name(os.path.splitext(os.path.basename(original_file_path))[0])
+
+                # ОПТИМИЗАЦИЯ 6: Сразу вычисляем относительный путь
+                relative_file_path = os.path.relpath(original_file_path, app.config['UPLOAD_FOLDER']).replace(os.sep,
+                                                                                                              '/')
+                encoded_path = quote(relative_file_path, safe='/')
+                public_link = f"{base_url}/images/{encoded_path}"
+
+                files_to_insert.append((
+                    relative_file_path,
+                    album_name,
+                    article_folder_norm,
+                    public_link
+                ))
+
+            # ОПТИМИЗАЦИЯ 7: Удаляем пустые папки которые могли остаться
+            cleanup_empty_folders(album_path)
+
+            # Используем одну транзакцию для всех операций
+            operations = [
+                ("DELETE FROM files WHERE album_name = %s", (album_name,)),
+                ("""INSERT INTO files (filename, album_name, article_number, public_link) 
+                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)
+            ]
+
+            db_manager.execute_in_transaction(operations)
+
+            logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
+            return True
+
+    except Exception as e:
+        logger.error(f"Error processing ZIP file {zip_path}: {e}")
+        return False
+
+
+def cleanup_empty_folders(folder_path):
+    """Рекурсивно удаляет пустые папки"""
+    try:
+        for root, dirs, files in os.walk(folder_path, topdown=False):
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                try:
+                    if not os.listdir(dir_path):  # Папка пуста
+                        os.rmdir(dir_path)
+                        logger.debug(f"Removed empty folder: {dir_path}")
+                except OSError:
+                    pass  # Папка не пуста или нет прав
+    except Exception as e:
+        logger.error(f"Error cleaning up empty folders in {folder_path}: {e}")
+
+
 def log_user_action(action, resource_type=None, resource_name=None, details=None):
     """
     Записывает действие пользователя в базу данных.
@@ -373,13 +536,13 @@ def api_sync():
         return jsonify({'error': f'Synchronization failed: {str(e)}'}), 500
 
 
-# Эндпоинт для принудительной очистка превью альбома
+# Эндпоинт для принудительной очистки превью альбома
 @app.route('/api/cleanup-thumbnails/<album_name>', methods=['POST'])
 @login_required
 def api_cleanup_thumbnails(album_name):
     """Принудительная очистка превью для альбома"""
     try:
-        cleanup_album_thumbnails(album_name, app.config['THUMBNAIL_FOLDER'])
+        cleanup_album_thumbnails(album_name)
         return jsonify({'message': f'Thumbnails for album {album_name} cleaned up successfully'})
     except Exception as e:
         logger.error(f"Error cleaning up thumbnails for {album_name}: {e}")
@@ -407,27 +570,14 @@ def upload_zip():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_zip_name)
         file.save(file_path)
 
-        # Валидация ZIP-архива
-        if not zip_processor.validate_zip_structure(file_path):
-            os.remove(file_path)
-            return jsonify({'error': 'Invalid ZIP structure or no images found'}), 400
-
-        # Обработка ZIP-архива
-        success, result = zip_processor.process_zip(file_path)
+        success = process_zip(file_path)
 
         if success:
             os.remove(file_path)
             log_user_action('upload', 'album', safe_zip_name)
-            return jsonify({
-                'message': 'Files uploaded successfully',
-                'album_name': result,
-                'files_processed': 'multiple'  # Можно расширить для возврата точного количества
-            })
+            return jsonify({'message': 'Files uploaded successfully', 'album_name': safe_folder_name(name_without_ext)})
         else:
-            # В случае ошибки удаляем временный файл
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            return jsonify({'error': f'Failed to process ZIP file: {result}'}), 500
+            return jsonify({'error': 'Failed to process ZIP file'}), 500
 
 
 # API: список всех файлов
@@ -437,12 +587,6 @@ def api_files():
     logger.info("API files endpoint called")
     files = get_all_files()
     return jsonify(files)
-
-
-# API: список альбомов
-def get_albums():
-    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
-    return [album['album_name'] for album in results] if results else []
 
 
 # API: список артикулов для альбома
@@ -742,7 +886,7 @@ def api_delete_album(album_name):
             logger.info(f"Deleted album directory: {album_path}")
 
         # Удаляем превью альбома
-        cleanup_album_thumbnails(album_name, app.config['THUMBNAIL_FOLDER'])
+        cleanup_album_thumbnails(album_name)
 
         # Удаляем папку превью если осталась
         if os.path.exists(thumbnail_album_path):
@@ -817,13 +961,22 @@ def api_count_album(album_name):
     logger.info(f"API count album endpoint called for: {album_name}")
     try:
         result = db_manager.execute_query(
-            "SELECT COUNT(*) as count FROM files WHERE album_name = %s",
+            "SELECT COUNT(*) as file_count FROM files WHERE album_name = %s",
             (album_name,),
             fetch=True
         )
-        count = result[0]['count'] if result else 0
-        logger.info(f"Album {album_name} has {count} files")
-        return jsonify({'count': count})
+
+        # Отладочная информация
+        logger.info(f"Count query result: {result}")
+
+        if result and len(result) > 0:
+            count = result[0].get('file_count', 0)
+            logger.info(f"Album {album_name} has {count} files")
+            return jsonify({'count': count})
+        else:
+            logger.warning(f"No count result for album {album_name}")
+            return jsonify({'count': 0})
+
     except Exception as e:
         logger.error(f"Error counting files for album {album_name}: {e}")
         return jsonify({'error': str(e)}), 500
@@ -837,17 +990,24 @@ def api_count_article(album_name, article_name):
     logger.info(f"API count article endpoint called for: {album_name}/{article_name}")
     try:
         result = db_manager.execute_query(
-            "SELECT COUNT(*) as count FROM files WHERE album_name = %s AND article_number = %s",
+            "SELECT COUNT(*) as file_count FROM files WHERE album_name = %s AND article_number = %s",
             (album_name, article_name),
             fetch=True
         )
-        count = result[0]['count'] if result else 0
-        logger.info(f"Article {article_name} in album {album_name} has {count} files")
-        return jsonify({'count': count})
+
+        logger.info(f"Article count query result: {result}")
+
+        if result and len(result) > 0:
+            count = result[0].get('file_count', 0)
+            logger.info(f"Article {article_name} in album {album_name} has {count} files")
+            return jsonify({'count': count})
+        else:
+            logger.warning(f"No count result for article {article_name} in album {album_name}")
+            return jsonify({'count': 0})
+
     except Exception as e:
         logger.error(f"Error counting files for article {article_name} in album {album_name}: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/admin')
 @login_required
@@ -939,11 +1099,14 @@ def admin_logs():
 
 # Инициализация базы данных при запуске приложения
 init_db()
+
+
 # Функция для закрытия соединений при выходе
 @atexit.register
 def cleanup():
     db_manager.close()
 
+
 # --- Main ---
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, ssl_context='adhoc')
