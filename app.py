@@ -13,13 +13,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 import tempfile
 import atexit
-import json
-from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
-from zip_processor import ZipProcessor
 from utils import safe_folder_name, cleanup_album_thumbnails, log_user_action
 from sync_manager import SyncManager
 
+from database import db_manager as db_manager
+from zip_processor import ZipProcessor
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -53,11 +52,13 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
-# Инициализация ZipProcessor
+
+# Инициализация оптимизированного процессора
 zip_processor = ZipProcessor(
     upload_folder=app.config['UPLOAD_FOLDER'],
     base_url=base_url,
-    thumbnail_folder=app.config['THUMBNAIL_FOLDER']
+    thumbnail_folder=app.config['THUMBNAIL_FOLDER'],
+    max_workers=16  # Настройте под вашу систему
 )
 
 sync_manager = SyncManager(
