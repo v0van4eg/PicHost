@@ -9,6 +9,7 @@ from PIL import Image
 import io
 import hashlib
 import shutil
+import time
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 import tempfile
@@ -281,7 +282,6 @@ def api_cleanup_thumbnails(album_name):
 
 
 # Загрузка ZIP
-# Загрузка ZIP
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_zip():
@@ -296,26 +296,29 @@ def upload_zip():
 
     if file:
         original_name = file.filename
-        base_name = os.path.basename(original_name)
-        name_without_ext, _ = os.path.splitext(base_name)
-        safe_zip_name = safe_folder_name(name_without_ext) + '.zip'
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_zip_name)
-        file.save(file_path)
 
-        # Используем zip_processor для обработки ZIP файла
-        success, result = zip_processor.process_zip(file_path)
+        # Обрабатываем прямо из памяти без сохранения на диск
+        logger.info(f"💾 Обработка ZIP из памяти: {original_name}")
+        process_start = time.time()
+
+        # Создаем временный файл в памяти
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            file.save(tmp_file.name)
+            success, result = zip_processor.process_zip(tmp_file.name)
+
+            # Удаляем временный файл
+            os.unlink(tmp_file.name)
+
+        process_time = time.time() - process_start
+        logger.info(f"✅ Обработка завершена за {process_time:.2f}s")
 
         if success:
-            os.remove(file_path)
-            # Исправленное логирование - используем result вместо uploaded_files
             log_user_action('upload', 'album', original_name, {
                 'album_name': result,
                 'original_filename': original_name
             })
             return jsonify({'message': 'Files uploaded successfully', 'album_name': result})
         else:
-            # Удаляем ZIP файл в случае ошибки
-            os.remove(file_path)
             return jsonify({'error': f'Failed to process ZIP file: {result}'}), 500
 
 
