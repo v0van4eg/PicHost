@@ -161,7 +161,7 @@ def init_db():
 
     for attempt in range(max_retries):
         try:
-            # Проверяем соединение и существование таблицы
+            # Просто проверяем, что таблицы существуют
             result = db_manager.execute_query("""
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
@@ -172,61 +172,11 @@ def init_db():
             table_exists = result[0]['exists'] if result else False
 
             if not table_exists:
-                logger.warning("Table 'files' does not exist. Creating...")
-                db_manager.execute_query('''
-                    CREATE TABLE files (
-                        id SERIAL PRIMARY KEY,
-                        filename TEXT NOT NULL,
-                        album_name TEXT NOT NULL,
-                        article_number TEXT NOT NULL,
-                        public_link TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''', commit=True)
+                logger.warning("Table 'files' does not exist. Database needs initialization.")
+                # В продакшене таблицы должны создаваться через init.sql
+                # Здесь просто логируем предупреждение
 
-                # Создаем индексы
-                db_manager.execute_query('CREATE INDEX idx_files_album_name ON files(album_name)', commit=True)
-                db_manager.execute_query('CREATE INDEX idx_files_article_number ON files(article_number)', commit=True)
-                db_manager.execute_query('CREATE INDEX idx_files_created_at ON files(created_at)', commit=True)
-
-                logger.info("Table 'files' created successfully")
-
-            # Проверяем существование таблицы логов действий пользователей
-            result_logs = db_manager.execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = 'user_actions_log'
-                );
-            """, fetch=True)
-
-            logs_table_exists = result_logs[0]['exists'] if result_logs else False
-
-            if not logs_table_exists:
-                logger.warning("Table 'user_actions_log' does not exist. Creating...")
-                db_manager.execute_query('''
-                    CREATE TABLE user_actions_log (
-                        id SERIAL PRIMARY KEY,
-                        user_id TEXT NOT NULL,
-                        username TEXT NOT NULL,
-                        action TEXT NOT NULL,
-                        resource_type TEXT,
-                        resource_name TEXT,
-                        details JSONB,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''', commit=True)
-
-                # Создаем индексы для логов
-                db_manager.execute_query('CREATE INDEX idx_user_actions_user_id ON user_actions_log(user_id)',
-                                         commit=True)
-                db_manager.execute_query('CREATE INDEX idx_user_actions_action ON user_actions_log(action)',
-                                         commit=True)
-                db_manager.execute_query('CREATE INDEX idx_user_actions_timestamp ON user_actions_log(timestamp)',
-                                         commit=True)
-
-                logger.info("Table 'user_actions_log' created successfully")
-
-            logger.info("Database initialized successfully")
+            logger.info("Database connection verified successfully")
             return
 
         except Exception as e:
@@ -239,128 +189,37 @@ def init_db():
                 raise
 
 
-# Получение списка альбомов
+# Оптимизированное получение альбомов
 def get_albums():
-    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
+    # Используем составной индекс idx_files_album_article
+    results = db_manager.execute_query("""
+        SELECT DISTINCT album_name 
+        FROM files 
+        ORDER BY album_name
+    """, fetch=True)
     return [album['album_name'] for album in results] if results else []
 
-
-# Получение списка артикулов для указанного альбома
+# Оптимизированное получение артикулов
 def get_articles(album_name):
+    # Используем составной индекс idx_files_album_article
     results = db_manager.execute_query(
-        "SELECT DISTINCT article_number FROM files WHERE album_name = %s",
+        "SELECT DISTINCT article_number FROM files WHERE album_name = %s ORDER BY article_number",
         (album_name,),
         fetch=True
     )
     return [article['article_number'] for article in results] if results else []
 
-
-# Получение всех файлов из БД
+# Оптимизированное получение файлов
 def get_all_files():
+    # Используем индекс по created_at
     results = db_manager.execute_query(
-        "SELECT filename, album_name, article_number, public_link, created_at FROM files ORDER BY created_at DESC",
+        """SELECT filename, album_name, article_number, public_link, created_at 
+           FROM files 
+           ORDER BY created_at DESC 
+           LIMIT 1000""",  # Добавляем лимит для больших БД
         fetch=True
     )
     return results if results else []
-
-
-# Синхронизация БД с файловой системой
-# def sync_db_with_filesystem():
-#     """
-#     Синхронизирует базу данных с файловой системой в одной транзакции.
-#     """
-#     try:
-#         # Получаем все файлы из БД в одном запросе
-#         db_files_result = db_manager.execute_query(
-#             "SELECT filename, album_name, article_number, public_link FROM files",
-#             fetch=True
-#         )
-#         db_files = {row['filename']: {
-#             'album_name': row['album_name'],
-#             'article_number': row['article_number'],
-#             'public_link': row['public_link']
-#         } for row in db_files_result} if db_files_result else {}
-#
-#         # Сканируем файловую систему
-#         fs_files = {}
-#         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
-#
-#         for root, dirs, files in os.walk(app.config['UPLOAD_FOLDER']):
-#             for file in files:
-#                 _, ext = os.path.splitext(file.lower())
-#                 if ext in allowed_extensions:
-#                     full_path = os.path.join(root, file)
-#                     rel_path = os.path.relpath(full_path, app.config['UPLOAD_FOLDER']).replace(os.sep, '/')
-#
-#                     # Определяем альбом и артикул из пути
-#                     path_parts = rel_path.split('/')
-#                     if len(path_parts) >= 1:
-#                         album_name = path_parts[0]
-#
-#                         # Если файл находится в подпапке (артикуле)
-#                         if len(path_parts) >= 3:
-#                             article_number = path_parts[1]
-#                         else:
-#                             # Если файл напрямую в альбоме, используем имя файла без расширения как артикул
-#                             article_number = os.path.splitext(file)[0]
-#
-#                         # Обеспечиваем безопасные имена
-#                         album_name = safe_folder_name(album_name)
-#                         article_number = safe_folder_name(article_number)
-#
-#                         encoded_path = quote(rel_path, safe='/')
-#                         public_link = f"{base_url}/images/{encoded_path}"
-#
-#                         fs_files[rel_path] = {
-#                             'album_name': album_name,
-#                             'article_number': article_number,
-#                             'public_link': public_link
-#                         }
-#
-#         # Находим файлы для удаления и добавления
-#         files_to_delete = set(db_files.keys()) - set(fs_files.keys())
-#         files_to_add = set(fs_files.keys()) - set(db_files.keys())
-#
-#         # Подготавливаем операции для транзакции
-#         operations = []
-#
-#         # Операция удаления
-#         if files_to_delete:
-#             delete_query = "DELETE FROM files WHERE filename = ANY(%s)"
-#             operations.append((delete_query, (list(files_to_delete),)))
-#
-#         # Операция вставки
-#         if files_to_add:
-#             insert_data = []
-#             for rel_path in files_to_add:
-#                 file_info = fs_files[rel_path]
-#                 insert_data.append((
-#                     rel_path,
-#                     file_info['album_name'],
-#                     file_info['article_number'],
-#                     file_info['public_link']
-#                 ))
-#
-#             insert_query = """
-#                 INSERT INTO files (filename, album_name, article_number, public_link)
-#                 VALUES (%s, %s, %s, %s)
-#             """
-#             operations.append((insert_query, insert_data, True))  # True для executemany
-#
-#         # Выполняем все операции в одной транзакции
-#         if operations:
-#             db_manager.execute_in_transaction(operations)
-#
-#         # Очищаем превью для удаленных файлов (вне транзакции, так как это файловые операции)
-#         for rel_path in files_to_delete:
-#             cleanup_file_thumbnails(rel_path)
-#
-#         logger.info(f"Sync completed: deleted {len(files_to_delete)} records, added {len(files_to_add)} records")
-#         return list(files_to_delete), list(files_to_add)
-#
-#     except Exception as e:
-#         logger.error(f"Error in sync_db_with_filesystem: {e}")
-#         raise
 
 
 # Эндпоинт синхронизации БД (обновленный)
