@@ -143,6 +143,7 @@ class SyncManager:
         for rel_path in files_to_delete:
             cleanup_file_thumbnails(rel_path, self.upload_folder, self.thumbnail_folder)
 
+
     def incremental_sync(self, since_timestamp=None):
         """
         Инкрементальная синхронизация (упрощенная версия)
