@@ -24,18 +24,139 @@ class ZipProcessor:
         # Кэш для путей
         self.path_cache = {}
         self.batch_size = 100  # Увеличили размер батча
+        self.original_zip_name = None  # Храним оригинальное имя ZIP
 
-    def process_zip(self, zip_path):
+    def process_zip(self, zip_path, original_zip_name=None):
         """
         Основной метод обработки ZIP
         """
+        self.original_zip_name = original_zip_name
         return self.process_zip_fast(zip_path)
+
+    def _extract_album_structure(self, zip_ref):
+        """
+        Анализирует структуру ZIP архива и определяет правильное имя альбома
+        и структуру папок
+        """
+        try:
+            # Получаем все файлы в архиве
+            all_files = [f.filename for f in zip_ref.filelist if not f.is_dir()]
+
+            if not all_files:
+                return None, "ZIP архив пуст"
+
+            # Анализируем структуру папок
+            folder_structure = {}
+            for file_path in all_files:
+                parts = file_path.split('/')
+
+                # Если файл в корне архива
+                if len(parts) == 1:
+                    return "root_album", "Файлы в корне архива"
+
+                # Первая папка - это потенциальный альбом
+                album_name = parts[0]
+                if album_name not in folder_structure:
+                    folder_structure[album_name] = set()
+
+                # Вторая папка - это артикул (если есть)
+                if len(parts) >= 3:
+                    article_name = parts[1]
+                    folder_structure[album_name].add(article_name)
+
+            # Если есть только одна папка верхнего уровня - используем ее как альбом
+            if len(folder_structure) == 1:
+                album_name = list(folder_structure.keys())[0]
+                # Проверяем, что это не служебная папка
+                if not self._is_system_folder(album_name):
+                    return safe_folder_name(album_name), None
+
+            # Если не удалось определить из структуры, используем оригинальное имя ZIP
+            if self.original_zip_name:
+                zip_name_without_ext = os.path.splitext(self.original_zip_name)[0]
+                return safe_folder_name(zip_name_without_ext), None
+            else:
+                # Fallback: используем имя временного файла
+                return None, "Не удалось определить имя альбома"
+
+        except Exception as e:
+            logger.error(f"Error analyzing ZIP structure: {e}")
+            return None, str(e)
+
+    def _is_system_folder(self, folder_name):
+        """
+        Проверяет, является ли папка системной (например, __MACOSX)
+        """
+        system_folders = {'__macosx', '.ds_store', 'thumbs.db', '.thumbnails'}
+        return folder_name.lower() in system_folders
+
+    def _get_album_name_from_zip(self, zip_path, zip_ref):
+        """
+        Определяет имя альбома из структуры ZIP архива
+        """
+        # Пытаемся определить имя альбома из структуры
+        album_name, structure_error = self._extract_album_structure(zip_ref)
+
+        if album_name and album_name != "root_album":
+            logger.info(f"🎯 Используем имя альбома из структуры: {album_name}")
+            return safe_folder_name(album_name)
+
+        # Если не удалось определить из структуры, используем оригинальное имя ZIP
+        if self.original_zip_name:
+            zip_name_without_ext = os.path.splitext(self.original_zip_name)[0]
+            logger.info(f"📁 Используем оригинальное имя ZIP как альбом: {zip_name_without_ext}")
+            return safe_folder_name(zip_name_without_ext)
+
+        # Fallback: используем имя временного файла (без расширения .zip)
+        zip_basename = os.path.basename(zip_path)
+        zip_name_without_ext = os.path.splitext(zip_basename)[0]
+        logger.warning(f"⚠️ Используем временное имя как альбом: {zip_name_without_ext}")
+        return safe_folder_name(zip_name_without_ext)
+
+    def _validate_zip_structure(self, zip_ref):
+        """
+        Проверяет структуру ZIP архива
+        """
+        try:
+            all_files = [f.filename for f in zip_ref.filelist if not f.is_dir()]
+
+            if not all_files:
+                return False, "ZIP архив не содержит файлов"
+
+            # Проверяем, что все файлы находятся в папках
+            root_files = [f for f in all_files if '/' not in f]
+            if root_files:
+                logger.warning(f"⚠️ В архиве найдены файлы в корне: {len(root_files)} файлов")
+
+            # Проверяем допустимые расширения
+            allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
+            valid_files = 0
+
+            for file_path in all_files:
+                # Пропускаем системные файлы
+                if any(part.lower().startswith('__') for part in file_path.split('/')):
+                    continue
+
+                _, ext = os.path.splitext(file_path.lower())
+                if ext in allowed_extensions:
+                    valid_files += 1
+
+            if valid_files == 0:
+                return False, "ZIP архив не содержит валидных изображений"
+
+            logger.info(f"✅ Структура архива проверена: {len(all_files)} файлов, {valid_files} изображений")
+            return True, None
+
+        except Exception as e:
+            logger.error(f"Error validating ZIP structure: {e}")
+            return False, str(e)
 
     def process_zip_fast(self, zip_path):
         """
-        Оптимизированная обработка ZIP с батчингом и кэшированием
+        Оптимизированная обработка ZIP с правильным определением структуры
         """
-        logger.info(f"🚀 Начинаем оптимизированную обработку ZIP: {zip_path}")
+        logger.info(f"🚀 Начинаем обработку ZIP: {zip_path}")
+        logger.info(f"📦 Оригинальное имя ZIP: {self.original_zip_name}")
         start_time = time.time()
 
         zip_basename = os.path.basename(zip_path)
@@ -46,13 +167,14 @@ class ZipProcessor:
 
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                album_name_raw = os.path.splitext(zip_basename)[0]
-                album_name = safe_folder_name(album_name_raw)
+                # Определяем имя альбома из структуры архива
+                album_name = self._get_album_name_from_zip(zip_path, zip_ref)
                 album_path = os.path.join(self.upload_folder, album_name)
 
-                # Быстрая валидация
-                if not self._quick_validate_zip(zip_ref):
-                    return False, "ZIP не содержит валидных изображений"
+                # Валидация структуры архива
+                is_valid, validation_error = self._validate_zip_structure(zip_ref)
+                if not is_valid:
+                    return False, validation_error
 
                 # Очистка превью
                 cleanup_album_thumbnails(album_name, self.thumbnail_folder)
@@ -64,7 +186,7 @@ class ZipProcessor:
                 if not image_files:
                     return False, "Нет файлов для обработки"
 
-                logger.info(f"📁 Найдено {len(image_files)} изображений, обрабатываем...")
+                logger.info(f"📁 Альбом: '{album_name}', файлов: {len(image_files)}")
 
                 # Параллельная обработка с батчингом
                 files_to_insert = self._process_files_parallel_batch(zip_ref, image_files, album_path, album_name)
@@ -75,11 +197,12 @@ class ZipProcessor:
                 # Удаляем пустые папки
                 cleanup_empty_folders(album_path)
 
-                # Батч-вставка в БД - используем быстрый метод
+                # Батч-вставка в БД
                 db_success = self._batch_db_insert_fast(album_name, files_to_insert)
 
                 processing_time = time.time() - start_time
-                logger.info(f"✅ ZIP обработан за {processing_time:.2f}s: {len(files_to_insert)} файлов")
+                logger.info(
+                    f"✅ ZIP обработан за {processing_time:.2f}s: {len(files_to_insert)} файлов в альбоме '{album_name}'")
 
                 return db_success, album_name
 
@@ -89,16 +212,26 @@ class ZipProcessor:
         finally:
             with self.processing_lock:
                 self.active_processes.pop(zip_basename, None)
+                self.original_zip_name = None  # Сбрасываем оригинальное имя
 
     def _get_image_files(self, zip_ref):
         """Быстрое получение списка изображений"""
         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
 
-        return [
-            file_info for file_info in zip_ref.infolist()
-            if not file_info.is_dir() and
-               os.path.splitext(file_info.filename.lower())[1] in allowed_extensions
-        ]
+        valid_files = []
+        for file_info in zip_ref.infolist():
+            if file_info.is_dir():
+                continue
+
+            # Пропускаем системные файлы и папки
+            if any(part.lower().startswith('__') for part in file_info.filename.split('/')):
+                continue
+
+            ext = os.path.splitext(file_info.filename.lower())[1]
+            if ext in allowed_extensions:
+                valid_files.append(file_info)
+
+        return valid_files
 
     def _process_files_parallel_batch(self, zip_ref, image_files, album_path, album_name):
         """Параллельная обработка файлов с оптимизацией блокировок"""
@@ -134,6 +267,10 @@ class ZipProcessor:
 
         for file_info in file_batch:
             try:
+                # Пропускаем системные файлы
+                if any(part.lower().startswith('__') for part in file_info.filename.split('/')):
+                    continue
+
                 # Извлекаем файл
                 zip_ref.extract(file_info.filename, album_path)
                 original_path = os.path.join(album_path, file_info.filename)
@@ -148,7 +285,7 @@ class ZipProcessor:
         return batch_results
 
     def _process_single_file_fast(self, file_path, album_name):
-        """Быстрая обработка одного файла с кэшированием"""
+        """Быстрая обработка одного файла с правильным определением структуры"""
         try:
             # Используем относительный путь как ключ кэша
             relative_path = os.path.relpath(file_path, self.upload_folder)
@@ -160,10 +297,17 @@ class ZipProcessor:
             file_dir = os.path.dirname(relative_path)
             filename = os.path.basename(relative_path)
 
-            # Определяем артикул
+            # Определяем артикул из структуры пути
             if file_dir and file_dir != '.':
-                article_number = safe_folder_name(os.path.basename(file_dir))
-                # Нормализуем путь
+                # Путь: album_name/article_number/filename
+                path_parts = file_dir.split(os.sep)
+                if len(path_parts) >= 2:
+                    # Вторая часть пути - это артикул
+                    article_number = safe_folder_name(path_parts[1])
+                else:
+                    article_number = safe_folder_name(os.path.splitext(filename)[0])
+
+                # Обеспечиваем правильную структуру папок
                 normalized_dir = os.path.join(self.upload_folder, album_name, article_number)
                 normalized_path = os.path.join(normalized_dir, filename)
 
@@ -172,6 +316,7 @@ class ZipProcessor:
                     shutil.move(file_path, normalized_path)
                     relative_path = os.path.relpath(normalized_path, self.upload_folder)
             else:
+                # Файл в корне альбома
                 article_number = safe_folder_name(os.path.splitext(filename)[0])
 
             # Создаем публичную ссылку
@@ -232,58 +377,6 @@ class ZipProcessor:
             logger.error(f"❌ Ошибка быстрой вставки: {e}")
             return False
 
-    def _batch_db_insert_copy(self, album_name, files_to_insert):
-        """Оптимизированная батч-вставка в БД с использованием COPY"""
-        try:
-            if not files_to_insert:
-                return True
-
-            logger.info(f"💾 Начинаем вставку {len(files_to_insert)} записей в БД (COPY)")
-            start_time = time.time()
-
-            # Используем более эффективный подход с временной таблицей
-            operations = [
-                # Создаем временную таблицу для быстрой загрузки
-                ("""
-                CREATE TEMP TABLE temp_files (
-                    filename TEXT,
-                    album_name TEXT,
-                    article_number TEXT,
-                    public_link TEXT
-                ) ON COMMIT DROP
-                """, ()),
-
-                # Используем COPY для быстрой загрузки данных
-                ("""
-                COPY temp_files (filename, album_name, article_number, public_link) 
-                FROM STDIN
-                """, files_to_insert, 'copy'),  # Специальный флаг для COPY
-
-                # Удаляем старые записи альбома
-                ("DELETE FROM files WHERE album_name = %s", (album_name,)),
-
-                # Вставляем данные из временной таблицы
-                ("""
-                INSERT INTO files (filename, album_name, article_number, public_link)
-                SELECT filename, album_name, article_number, public_link 
-                FROM temp_files
-                """, ())
-            ]
-
-            success = db_manager.execute_in_transaction_copy(operations, files_to_insert)
-
-            elapsed = time.time() - start_time
-            if success:
-                logger.info(f"✅ Данные успешно сохранены в БД за {elapsed:.2f}s")
-                return True
-            else:
-                logger.error(f"❌ Ошибка вставки в БД за {elapsed:.2f}s")
-                return False
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка вставки в БД: {e}")
-            return False
-
     def _quick_validate_zip(self, zip_ref):
         """Быстрая валидация ZIP архива"""
         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
@@ -291,6 +384,10 @@ class ZipProcessor:
         # Проверяем первые 10 файлов для быстрой валидации
         for file_info in zip_ref.infolist()[:10]:
             if not file_info.is_dir():
+                # Пропускаем системные файлы
+                if any(part.lower().startswith('__') for part in file_info.filename.split('/')):
+                    continue
+
                 ext = os.path.splitext(file_info.filename.lower())[1]
                 if ext in allowed_extensions:
                     return True

@@ -304,8 +304,7 @@ def upload_zip():
         # Создаем временный файл в памяти
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
             file.save(tmp_file.name)
-            success, result = zip_processor.process_zip(tmp_file.name)
-
+            success, result = zip_processor.process_zip(tmp_file.name, original_name)
             # Удаляем временный файл
             os.unlink(tmp_file.name)
 
