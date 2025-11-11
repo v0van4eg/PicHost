@@ -2,15 +2,12 @@ FROM python:slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY source/requirements.txt /app/
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# COPY static templates app.py gunicorn_config.py database.py auth_system.py /app/
-
-COPY . .
-
-RUN mkdir /app/thumbnails /app/images
+# Копируем все исходные файлы
+COPY source /app/
 
 EXPOSE 5000
 

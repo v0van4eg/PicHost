@@ -789,8 +789,7 @@
         </div>
     </div>
 
-    <script src="/static/index.js"></script>
-    <script>
+    <script src="{{ url_for('static', filename='index.js') }}"></script>    <script>
         // Передаем информацию о ролях пользователя в JavaScript
         window.currentUser = {
             isAppAdmin: {% if is_app_admin() %}true{% else %}false{% endif %},

@@ -41,14 +41,12 @@ services:
       - OAUTH_ACCESS_TOKEN_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token
       - OAUTH_LOGOUT_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout
     volumes:
-      - ./static:/app/static
       - ./images:/app/images
-      - ./thumbnails:/app/thumbnails
-      - ./templates:/app/templates
-      - ./gunicorn_config.py:/app/gunicorn_config.py
+      - thumbnails:/app/thumbnails
     restart: always
     depends_on:
       - db
+
 
   web:
     image: nginx:alpine
@@ -57,10 +55,16 @@ services:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./static:/app/static:ro
-      - ./templates:/app/templates:ro
+      # Монтируем статику напрямую из исходной папки
+      - ./source/static:/app/static:ro
+      - ./source/templates:/app/templates:ro
       - ./images:/app/images:rw
-      - ./thumbnails:/app/thumbnails:rw
+      - thumbnails:/app/thumbnails:rw
     restart: always
     depends_on:
       - app
+
+volumes:
+  thumbnails:
+
+
