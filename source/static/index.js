@@ -20,6 +20,8 @@ let albumSelector, articleSelector;
 let createXlsxBtn, xlsxModal, xlsxTemplateSelect, separatorSelect, generateXlsxBtn, cancelXlsxBtn;
 // Элементы для удаления
 let deleteAlbumBtn, deleteArticleBtn;
+// Элемент для оверлея загрузки
+let loadingOverlay;
 
 // Конфигурация превью
 const PREVIEW_CONFIG = {
@@ -107,6 +109,7 @@ function initializeElements() {
     progressContainer = document.getElementById('progressContainer');
     progressBar = document.getElementById('progressBar');
     progressText = document.getElementById('progressText');
+    loadingOverlay = document.getElementById('loadingOverlay');
 
     // Новые элементы селекторов
     albumSelector = document.getElementById('albumSelector');
@@ -127,11 +130,82 @@ function initializeElements() {
     if (!dropArea || !zipFileInput || !browseBtn || !uploadBtn || !uploadForm || !linkList || !currentAlbumTitle ||
         !manageBtn || !backToUploadBtn || !uploadCard || !manageCard || !progressContainer || !progressBar || !progressText ||
         !albumSelector || !articleSelector || !createXlsxBtn || !xlsxModal || !xlsxTemplateSelect || !separatorSelect ||
-        !generateXlsxBtn || !cancelXlsxBtn) {
+        !generateXlsxBtn || !cancelXlsxBtn || !loadingOverlay) {
         console.error('One or more required DOM elements not found!');
         return false;
     }
     return true;
+}
+
+// --- Функции для управления оверлеем загрузки ---
+function showLoadingOverlay(message = 'Обработка архива...', details = 'Распаковываем файлы и создаем превью. Это может занять несколько минут.') {
+    if (loadingOverlay) {
+        const textElement = loadingOverlay.querySelector('.loading-text');
+        const detailsElement = loadingOverlay.querySelector('.loading-details');
+
+        if (textElement) textElement.textContent = message;
+        if (detailsElement) detailsElement.textContent = details;
+
+        loadingOverlay.classList.add('show');
+    }
+}
+
+function hideLoadingOverlay() {
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('show');
+    }
+}
+
+function updateLoadingProgress(stage, current, total) {
+    if (loadingOverlay) {
+        const detailsElement = loadingOverlay.querySelector('.loading-details');
+        if (detailsElement) {
+            let message = '';
+            switch(stage) {
+                case 'extracting':
+                    message = `Распаковка файлов: ${current}/${total}`;
+                    break;
+                case 'processing':
+                    message = `Обработка изображений: ${current}/${total}`;
+                    break;
+                case 'thumbnails':
+                    message = `Создание превью: ${current}/${total}`;
+                    break;
+                case 'database':
+                    message = `Сохранение в базу данных...`;
+                    break;
+                default:
+                    message = `Обработка: ${current}/${total}`;
+            }
+            detailsElement.textContent = message;
+        }
+    }
+}
+
+function updateLoadingOverlay(stage, message, details) {
+    if (loadingOverlay) {
+        const textElement = loadingOverlay.querySelector('.loading-text');
+        const detailsElement = loadingOverlay.querySelector('.loading-details');
+
+        if (textElement) textElement.textContent = message;
+        if (detailsElement) detailsElement.textContent = details;
+
+        // Меняем цвет спиннера в зависимости от этапа
+        const spinner = loadingOverlay.querySelector('.loading-spinner');
+        if (spinner) {
+            switch(stage) {
+                case 'final':
+                case 'complete':
+                    spinner.style.borderTopColor = '#2ecc71';
+                    break;
+                case 'error':
+                    spinner.style.borderTopColor = '#e74c3c';
+                    break;
+                default:
+                    spinner.style.borderTopColor = '#3498db';
+            }
+        }
+    }
 }
 
 // --- Функция обновления UI ---
@@ -242,11 +316,9 @@ async function updateTitleWithCount(albumName, articleName = '') {
     let title = '';
 
     if (albumName && articleName) {
-        // Считаем файлы для конкретного артикула
         count = await getArticleFileCount(albumName, articleName);
         title = `Изображения в "${albumName}" (артикул: ${articleName}) - ${count} файлов`;
     } else if (albumName) {
-        // Считаем файлы для всего альбома
         count = await getAlbumFileCount(albumName);
         title = `Изображения в "${albumName}" - ${count} файлов`;
     } else {
@@ -271,9 +343,7 @@ async function loadAlbums() {
             albumSelector.appendChild(option);
         });
 
-        // Обновляем состояние кнопок после загрузки альбомов
         updateDeleteButtonsState();
-
         return albums;
     } catch (error) {
         console.error('Error loading albums:', error);
@@ -283,7 +353,6 @@ async function loadAlbums() {
     }
 }
 
-// Улучшенная функция загрузки артикулов
 async function loadArticles(albumName) {
     if (!albumName) {
         articleSelector.innerHTML = '<option value="">-- Сначала выберите альбом --</option>';
@@ -294,7 +363,6 @@ async function loadArticles(albumName) {
 
     try {
         console.log('Loading articles for album:', albumName);
-
         const response = await fetch(`/api/articles/${encodeURIComponent(albumName)}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load articles`);
 
@@ -311,7 +379,6 @@ async function loadArticles(albumName) {
 
         articleSelector.disabled = false;
         updateDeleteButtonsState();
-
         return articles;
     } catch (error) {
         console.error('Error loading articles:', error);
@@ -355,12 +422,10 @@ function createFileListItem(item, parentElement) {
     img.width = PREVIEW_CONFIG.thumbnail.width;
     img.height = PREVIEW_CONFIG.thumbnail.height;
 
-    // Заглушка пока изображение не загружено
     img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjRjFGNUY5Ii8+CjxwYXRoIGQ9Ik0zNi41IDI0LjVIMjMuNVYzNy41SDM2LjVWMjQuNVoiIGZpbGw9IiNEOEUxRTYiLz4KPHBhdGggZD0iTTI1IDI2SDM1VjI5SDI1VjI2WiIgZmlsbD0iI0Q4RTFFNiIvPgo8cGF0aCBkPSJNMjUgMzFIMzJWMzRIMjVWMzFaIiBmaWxsPSIjRDhFMUU2Ii8+Cjwvc3ZnPg==';
     img.setAttribute('data-src', fileData.thumbnail_url);
     img.alt = Path.basename(fileData.filename);
 
-    // Добавляем обработчик для показа полноразмерного превью
     img.addEventListener('click', () => showPreviewModal(fileData));
 
     img.onerror = function() {
@@ -394,13 +459,11 @@ function createFileListItem(item, parentElement) {
     li.appendChild(fileInfo);
     parentElement.appendChild(li);
 
-    // Начинаем ленивую загрузку
     lazyLoader.observe(img);
 }
 
 // --- Модальное окно для просмотра полноразмерного изображения ---
 function showPreviewModal(fileData) {
-    // Создаем модальное окно если его нет
     let modal = document.getElementById('previewModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -421,7 +484,6 @@ function showPreviewModal(fileData) {
         `;
         document.body.appendChild(modal);
 
-        // Обработчики для модального окна
         modal.querySelector('.modal-close').addEventListener('click', () => {
             modal.style.display = 'none';
         });
@@ -432,7 +494,6 @@ function showPreviewModal(fileData) {
             }
         });
 
-        // Закрытие по ESC
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && modal.style.display === 'flex') {
                 modal.style.display = 'none';
@@ -440,13 +501,11 @@ function showPreviewModal(fileData) {
         });
     }
 
-    // Заполняем модальное окно данными
     const modalImage = modal.querySelector('.modal-image');
     const modalFilename = modal.querySelector('.modal-filename');
     const copyFullBtn = modal.querySelector('.btn-copy-full');
     const viewOriginalBtn = modal.querySelector('.btn-view-original');
 
-    // Показываем среднее превью в модальном окне
     modalImage.src = fileData.preview_url;
     modalFilename.textContent = Path.basename(fileData.filename);
     viewOriginalBtn.href = fileData.public_link;
@@ -463,11 +522,9 @@ async function showFilesForAlbum(albumName, articleName = '') {
         return;
     }
 
-    // Обновляем заголовок с количеством файлов
     await updateTitleWithCount(albumName, articleName);
 
     try {
-        // Формируем URL в зависимости от наличия артикула
         let url;
         if (articleName) {
             url = `/api/thumbnails/${encodeURIComponent(albumName)}/${encodeURIComponent(articleName)}`;
@@ -490,10 +547,8 @@ async function showFilesForAlbum(albumName, articleName = '') {
             return;
         }
 
-        // Очищаем список
         linkList.innerHTML = '';
 
-        // Если выбран конкретный артикул, показываем файлы без группировки
         if (articleName) {
             const extractSuffix = (filename) => {
                 const baseName = Path.basename(filename);
@@ -511,7 +566,6 @@ async function showFilesForAlbum(albumName, articleName = '') {
                 createFileListItem(item, linkList);
             });
         } else {
-            // Группировка файлов по артикулам для отображения всего альбома
             const groupedFiles = {};
             files.forEach(item => {
                 const article = item.article_number;
@@ -521,7 +575,6 @@ async function showFilesForAlbum(albumName, articleName = '') {
                 groupedFiles[article].push(item);
             });
 
-            // Показываем с группировкой по артикулам
             const sortedArticles = Object.keys(groupedFiles).sort();
 
             if (sortedArticles.length === 0) {
@@ -576,9 +629,7 @@ async function deleteAlbum(albumName) {
         }
 
         const result = await response.json();
-//        alert(result.message);
 
-        // Обновляем интерфейс
         await loadAlbums();
         clearLinkList();
         updateDeleteButtonsState();
@@ -605,14 +656,11 @@ async function deleteArticle(albumName, articleName) {
         }
 
         const result = await response.json();
-//        alert(result.message);
 
-        // Обновляем интерфейс
         await loadArticles(albumName);
         clearLinkList();
         updateDeleteButtonsState();
 
-        // Если удалили текущий артикул, показываем весь альбом
         if (articleSelector.value === articleName) {
             articleSelector.value = '';
             showFilesForAlbum(albumName);
@@ -631,37 +679,30 @@ function updateDeleteButtonsState() {
 
     if (deleteAlbumBtn) {
         deleteAlbumBtn.disabled = !selectedAlbum;
-        // Показываем/скрываем кнопку в зависимости от выбора альбома
         deleteAlbumBtn.style.display = selectedAlbum ? 'flex' : 'none';
     }
 
     if (deleteArticleBtn) {
         deleteArticleBtn.disabled = !selectedAlbum || !selectedArticle;
-        // Показываем/скрываем кнопку в зависимости от выбора артикула
         deleteArticleBtn.style.display = (selectedAlbum && selectedArticle) ? 'flex' : 'none';
     }
 }
 
 // --- Инициализация кнопок удаления ---
 function initDeleteButtons() {
-    // Проверяем, является ли пользователь appadmin
     const isAppAdmin = window.currentUser && window.currentUser.isAppAdmin;
 
-    // Если пользователь не appadmin, не создаем кнопки удаления
     if (!isAppAdmin) {
         return;
     }
 
-    // Создаем кнопки если их нет
     let deleteButtonsContainer = document.getElementById('deleteButtonsContainer');
     if (!deleteButtonsContainer) {
         deleteButtonsContainer = document.createElement('div');
         deleteButtonsContainer.id = 'deleteButtonsContainer';
         deleteButtonsContainer.className = 'delete-buttons-container';
-        // Находим контейнер для кнопок (после селекторов)
         const manageCardContent = document.querySelector('.manage-card-content');
         if (manageCardContent) {
-            // Вставляем контейнер после селекторов, но перед кнопкой XLSX
             const selectorGroups = manageCardContent.querySelectorAll('.selector-group');
             const lastSelectorGroup = selectorGroups[selectorGroups.length - 1];
             if (lastSelectorGroup && lastSelectorGroup.nextSibling) {
@@ -672,7 +713,6 @@ function initDeleteButtons() {
         }
     }
 
-    // Создаем кнопку удаления альбома если ее нет
     if (!deleteAlbumBtn) {
         deleteAlbumBtn = document.createElement('button');
         deleteAlbumBtn.id = 'deleteAlbumBtn';
@@ -685,7 +725,6 @@ function initDeleteButtons() {
         deleteButtonsContainer.appendChild(deleteAlbumBtn);
     }
 
-    // Создаем кнопку удаления артикула если ее нет
     if (!deleteArticleBtn) {
         deleteArticleBtn = document.createElement('button');
         deleteArticleBtn.id = 'deleteArticleBtn';
@@ -700,7 +739,6 @@ function initDeleteButtons() {
 
     updateDeleteButtonsState();
 }
-
 
 // --- Функции для работы с XLSX ---
 function initXlsxModal() {
@@ -720,14 +758,12 @@ function initXlsxModal() {
 
     generateXlsxBtn.addEventListener('click', generateXlsxFile);
 
-    // Закрытие модального окна при клике вне его
     xlsxModal.addEventListener('click', function(e) {
         if (e.target === xlsxModal) {
             hideXlsxModal();
         }
     });
 
-    // Закрытие по ESC
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && xlsxModal.style.display === 'flex') {
             hideXlsxModal();
@@ -743,7 +779,6 @@ function showXlsxModal() {
     }
 
     xlsxModal.style.display = 'flex';
-    // Сброс выбора
     xlsxTemplateSelect.value = 'in_row';
     separatorSelect.value = 'comma';
     document.getElementById('separatorGroup').style.display = 'none';
@@ -764,7 +799,6 @@ async function generateXlsxFile() {
         return;
     }
 
-    // Определяем разделитель
     let separator = ', ';
     if (separatorType === 'newline') {
         separator = '\n';
@@ -795,14 +829,12 @@ async function generateXlsxFile() {
             throw new Error(errorData.error || 'Ошибка при создании файла');
         }
 
-        // Скачиваем файл
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
 
-        // Генерируем имя файла
         let filename = `links_${selectedAlbum}`;
         if (selectedArticle) {
             filename += `_${selectedArticle}`;
@@ -893,7 +925,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateDeleteButtonsState();
 
         if (selectedAlbum) {
-            // Небольшая задержка для лучшего UX
             setTimeout(() => {
                 showFilesForAlbum(selectedAlbum);
             }, 100);
@@ -937,42 +968,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 const percentComplete = (e.loaded / e.total) * 100;
                 progressBar.style.width = percentComplete + '%';
                 progressText.textContent = Math.round(percentComplete) + '%';
+
+                // Показываем оверлей когда загрузка почти завершена
+                if (percentComplete > 95) {
+                    showLoadingOverlay(
+                        'Начинаем обработку...',
+                        'Загрузка завершена. Начинаем распаковку архива.'
+                    );
+                }
             }
         });
 
         xhr.addEventListener('load', function() {
+            progressContainer.style.display = 'none';
+            showLoadingOverlay(
+                'Обработка архива',
+                'Распаковываем файлы и создаем превью. Это может занять несколько минут...'
+            );
+
             if (xhr.status >= 200 && xhr.status < 300) {
                 try {
                     const data = JSON.parse(xhr.responseText);
                     if (!data.error) {
                         let albumName = data.album_name || file.name.replace(/\.zip$/i, '');
                         currentAlbumName = albumName;
-                        showFilesForAlbum(albumName);
+
+                        updateLoadingOverlay('final', 'Загрузка завершена!', 'Обновляем список файлов...');
+
+                        setTimeout(() => {
+                            showFilesForAlbum(albumName).then(() => {
+                                setTimeout(() => {
+                                    hideLoadingOverlay();
+                                }, 500);
+                            });
+                        }, 1000);
+
                         zipFileInput.value = '';
                         droppedFile = null;
                         updateUI();
 
-                        // Обновляем список альбомов после успешной загрузки
                         loadAlbums();
                     } else {
                         console.error('Upload failed:', data.error);
+                        hideLoadingOverlay();
                         alert(`Ошибка загрузки: ${data.error}`);
                     }
                 } catch (error) {
                     console.error('JSON parse failed:', error);
+                    hideLoadingOverlay();
                     alert('Ошибка: получен некорректный ответ от сервера.');
                 }
             } else {
                 console.error('Upload failed with status:', xhr.status);
+                hideLoadingOverlay();
                 alert(`Ошибка загрузки: HTTP ${xhr.status}`);
             }
-            progressContainer.style.display = 'none';
+
             uploadBtn.disabled = false;
             uploadBtn.innerHTML = '<span>Загрузить архив</span>';
         });
 
         xhr.addEventListener('error', function() {
             console.error('Upload failed due to network error');
+            hideLoadingOverlay();
             alert('Ошибка сети при загрузке файла.');
             progressContainer.style.display = 'none';
             uploadBtn.disabled = false;
@@ -989,11 +1047,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("Кнопка 'Управление ссылками' нажата");
             uploadCard.style.display = 'none';
             manageCard.style.display = 'flex';
-
-            // Очищаем правую карточку
             clearLinkList();
-
-            // Загружаем список альбомов при переходе в режим управления
             loadAlbums();
         });
     } else {
