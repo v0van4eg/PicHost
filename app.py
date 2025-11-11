@@ -14,11 +14,13 @@ from openpyxl.styles import Font, PatternFill
 import tempfile
 import atexit
 from werkzeug.middleware.proxy_fix import ProxyFix
+# Модули приложения
 from utils import safe_folder_name, cleanup_album_thumbnails, log_user_action
 from sync_manager import SyncManager
-
 from database import db_manager as db_manager
 from zip_processor import ZipProcessor
+from document_generator import init_document_generator, get_document_generator
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -52,8 +54,9 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
+###########  Инициализация модулей  ###############
+document_generator = init_document_generator(base_url, app.config['UPLOAD_FOLDER'])
 
-# Инициализация оптимизированного процессора
 zip_processor = ZipProcessor(
     upload_folder=app.config['UPLOAD_FOLDER'],
     base_url=base_url,
@@ -66,6 +69,7 @@ sync_manager = SyncManager(
     base_url=base_url,
     thumbnail_folder=app.config['THUMBNAIL_FOLDER']
 )
+###########  Инициализация модулей конец  ###############
 
 
 def generate_image_hash(file_path):
@@ -605,121 +609,26 @@ def api_export_xlsx():
             return jsonify({'error': 'No data provided'}), 400
 
         album_name = data.get('album_name')
-        article_name = data.get('article_name')  # Может быть None для всех артикулов
-        export_type = data.get('export_type')  # 'in_row' или 'in_cell'
-        separator = data.get('separator', ', ')  # Разделитель для варианта "в ячейку"
+        article_name = data.get('article_name')
+        export_type = data.get('export_type', 'in_row')
+        separator = data.get('separator', ', ')
 
         if not album_name or not export_type:
             return jsonify({'error': 'Missing required parameters'}), 400
 
-        # Получаем данные из БД
-        if article_name:
-            results = db_manager.execute_query(
-                "SELECT filename, article_number, public_link FROM files WHERE album_name = %s AND article_number = %s ORDER BY article_number, filename",
-                (album_name, article_name),
-                fetch=True
-            )
-        else:
-            results = db_manager.execute_query(
-                "SELECT filename, article_number, public_link FROM files WHERE album_name = %s ORDER BY article_number, filename",
-                (album_name,),
-                fetch=True
-            )
+        # Используем генератор документов
+        temp_filename, download_filename = get_document_generator().generate_xlsx_export(
+            album_name, article_name, export_type, separator
+        )
 
-        if not results:
-            return jsonify({'error': 'No data found for export'}), 404
-
-        # Функция для извлечения числового суффикса из имени файла
-        def extract_suffix(filename):
-            import re
-            # Ищем паттерн: любое количество символов, затем подчеркивание, затем цифры до точки
-            match = re.search(r'(.+)_(\d+)(\.[^.]*)?$', filename)
-            if match:
-                return int(match.group(2))  # Возвращаем числовое значение
-            return 0  # Если суффикс не найден
-
-        # Сортируем результаты по артикулу и числовому суффиксу в имени файла
-        sorted_results = sorted(results, key=lambda x: (x['article_number'], extract_suffix(x['filename'])))
-
-        # Группируем ссылки по артикулам с правильной сортировкой
-        articles_data = {}
-        for row in sorted_results:
-            article = row['article_number']
-            if article not in articles_data:
-                articles_data[article] = []
-            articles_data[article].append(row['public_link'])
-
-        # Создаем Excel файл
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Ссылки на изображения"
-
-        # Стили для шапки
-        header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-
-        if export_type == 'in_row':
-            # Вариант "В строку"
-            # Определяем максимальное количество ссылок
-            max_links = max(len(links) for links in articles_data.values())
-
-            # Создаем шапку
-            headers = ['Артикул'] + [f'Ссылка {i + 1}' for i in range(max_links)]
-            for col, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = header_font
-                cell.fill = header_fill
-
-            # Заполняем данные (уже отсортированные)
-            for row, (article, links) in enumerate(articles_data.items(), 2):
-                ws.cell(row=row, column=1, value=article)
-                for col, link in enumerate(links, 2):
-                    ws.cell(row=row, column=col, value=link)
-
-        elif export_type == 'in_cell':
-            # Вариант "В ячейку"
-            headers = ['Артикул', 'Ссылки']
-            for col, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = header_font
-                cell.fill = header_fill
-
-            # Заполняем данные (уже отсортированные)
-            for row, (article, links) in enumerate(articles_data.items(), 2):
-                ws.cell(row=row, column=1, value=article)
-                # Объединяем ссылки через разделитель (уже отсортированные)
-                links_text = separator.join(links)
-                ws.cell(row=row, column=2, value=links_text)
-
-        # Авто-ширина колонок
-        for column in ws.columns:
-            max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
-
-        # Сохраняем файл во временную директорию
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
-            wb.save(tmp_file.name)
-            tmp_filename = tmp_file.name
-
-        # Генерируем имя файла
-        filename = f"links_{album_name}"
-        if article_name:
-            filename += f"_{article_name}"
-        filename += ".xlsx"
+        if temp_filename is None:
+            return jsonify({'error': download_filename}), 500  # download_filename содержит сообщение об ошибке
 
         # Отправляем файл
         response = send_file(
-            tmp_filename,
+            temp_filename,
             as_attachment=True,
-            download_name=filename,
+            download_name=download_filename,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
@@ -727,15 +636,107 @@ def api_export_xlsx():
         @response.call_on_close
         def remove_temp_file():
             try:
-                os.unlink(tmp_filename)
+                os.unlink(temp_filename)
             except Exception as e:
-                logger.error(f"Error removing temporary file {tmp_filename}: {e}")
+                logger.error(f"Error removing temporary file {temp_filename}: {e}")
 
         return response
 
     except Exception as e:
         logger.error(f"Error creating XLSX file: {e}")
         return jsonify({'error': f'Failed to create XLSX file: {str(e)}'}), 500
+
+##################################################
+# Добавить новые эндпоинты для других форматов экспорта
+@app.route('/api/export-csv', methods=['POST'])
+@login_required
+def api_export_csv():
+    """Создание CSV документа с ссылками"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        album_name = data.get('album_name')
+        article_name = data.get('article_name')
+        separator = data.get('separator', ',')
+
+        if not album_name:
+            return jsonify({'error': 'Album name is required'}), 400
+
+        temp_filename, download_filename = get_document_generator().generate_csv_export(
+            album_name, article_name, separator
+        )
+
+        if temp_filename is None:
+            return jsonify({'error': download_filename}), 500
+
+        response = send_file(
+            temp_filename,
+            as_attachment=True,
+            download_name=download_filename,
+            mimetype='text/csv'
+        )
+
+        @response.call_on_close
+        def remove_temp_file():
+            try:
+                os.unlink(temp_filename)
+            except Exception as e:
+                logger.error(f"Error removing temporary CSV file: {e}")
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error creating CSV file: {e}")
+        return jsonify({'error': f'Failed to create CSV file: {str(e)}'}), 500
+
+@app.route('/api/export-text', methods=['POST'])
+@login_required
+def api_export_text():
+    """Создание текстового документа со списком файлов"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        album_name = data.get('album_name')
+        article_name = data.get('article_name')
+        export_format = data.get('format', 'txt')  # 'txt' или 'md'
+
+        if not album_name:
+            return jsonify({'error': 'Album name is required'}), 400
+
+        temp_filename, download_filename = get_document_generator().generate_file_list_export(
+            album_name, article_name, export_format
+        )
+
+        if temp_filename is None:
+            return jsonify({'error': download_filename}), 500
+
+        mimetype = 'text/markdown' if export_format == 'md' else 'text/plain'
+
+        response = send_file(
+            temp_filename,
+            as_attachment=True,
+            download_name=download_filename,
+            mimetype=mimetype
+        )
+
+        @response.call_on_close
+        def remove_temp_file():
+            try:
+                os.unlink(temp_filename)
+            except Exception as e:
+                logger.error(f"Error removing temporary text file: {e}")
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error creating text file: {e}")
+        return jsonify({'error': f'Failed to create text file: {str(e)}'}), 500
+
+    ##################################################
 
 
 @app.route('/api/delete-album/<album_name>', methods=['DELETE'])
