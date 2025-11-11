@@ -1,4 +1,6 @@
 -- init.sql
+
+-- Таблица файлов
 CREATE TABLE IF NOT EXISTS files (
     id SERIAL PRIMARY KEY,
     filename TEXT NOT NULL,
@@ -37,3 +39,7 @@ CREATE TABLE IF NOT EXISTS user_actions_log (
 CREATE INDEX IF NOT EXISTS idx_user_actions_user_id ON user_actions_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_actions_timestamp ON user_actions_log(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_user_actions_composite ON user_actions_log(action, timestamp DESC);
+
+-- Настройки для производительности (опционально)
+ALTER TABLE files SET (fillfactor = 90);
+ALTER TABLE user_actions_log SET (fillfactor = 85);

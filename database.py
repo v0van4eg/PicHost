@@ -189,6 +189,64 @@ class DatabaseManager:
             if cursor:
                 cursor.close()
 
+    def execute_in_transaction_copy(self, operations, copy_data=None):
+        """
+        Выполняет операции в транзакции с поддержкой COPY для массовой вставки
+        """
+        conn = None
+        cursor = None
+        logger.info(f"Запускаем транзакцию COPY с {len(operations)} операциями")
+
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            for operation in operations:
+                query = operation[0]
+                params = operation[1] if len(operation) > 1 else ()
+
+                if len(operation) > 2 and operation[2] == 'copy':
+                    # Используем COPY для массовой вставки
+                    if copy_data:
+                        # Создаем временный файл в памяти
+                        import io
+                        data_stream = io.StringIO()
+
+                        for row in copy_data:
+                            # Экранируем данные для формата COPY
+                            escaped_row = [
+                                str(field).replace('\t', '\\t').replace('\n', '\\n').replace('\r', '\\r')
+                                for field in row
+                            ]
+                            data_stream.write('\t'.join(escaped_row) + '\n')
+
+                        data_stream.seek(0)
+                        cursor.copy_from(data_stream, 'temp_files',
+                                         columns=('filename', 'album_name', 'article_number', 'public_link'))
+
+                        logger.info(f"COPY завершен: {len(copy_data)} строк")
+                else:
+                    # Обычный запрос
+                    if isinstance(params, list) and len(params) > 0 and isinstance(params[0], (list, tuple)):
+                        # executemany для массовых операций
+                        cursor.executemany(query, params)
+                    else:
+                        # execute для одиночных операций
+                        cursor.execute(query, params)
+
+            conn.commit()
+            logger.info(f"Транзакция COPY успешна")
+            return True
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+                logger.error(f"Transaction COPY failed: {e}")
+            raise
+        finally:
+            if cursor:
+                cursor.close()
+
     def batch_execute(self, query, params_list, batch_size=1000):
         """
         Выполняет пакетные операции с разбивкой на части.
@@ -289,6 +347,32 @@ class DatabaseManager:
 
         logger.info(f"🗑️ Удалено {total_deleted} записей")
         return total_deleted
+
+    def execute_large_batch(self, query, params_list, batch_size=1000):
+        """
+        Оптимизированная батч-вставка для очень больших наборов данных
+        """
+        total_rows = 0
+        start_time = time.time()
+
+        for i in range(0, len(params_list), batch_size):
+            batch = params_list[i:i + batch_size]
+
+            # Используем отдельное соединение для каждого батча
+            with self.transaction() as cursor:
+                cursor.executemany(query, batch)
+                total_rows += len(batch)
+
+            # Периодически логируем прогресс
+            if (i // batch_size) % 5 == 0:
+                elapsed = time.time() - start_time
+                logger.info(f"📊 Обработано {i + len(batch)}/{len(params_list)} записей "
+                            f"({(i + len(batch)) / elapsed:.1f} записей/сек)")
+
+        elapsed_total = time.time() - start_time
+        logger.info(f"✅ Большая батч-вставка завершена: {total_rows} строк за {elapsed_total:.2f}s "
+                    f"({total_rows / elapsed_total:.1f} записей/сек)")
+        return total_rows
 
     def get_files_by_album_fast(self, album_name):
         """
