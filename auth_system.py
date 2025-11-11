@@ -1,12 +1,13 @@
-# auth_system.py - исправленная версия с фильтрацией ролей и отдельным шаблоном профиля
+# auth_system.py
 
-from flask import session, redirect, url_for, request, flash, render_template # Добавлен render_template
+from flask import session, redirect, url_for, request, render_template
 from functools import wraps
 import base64
 import json
 import secrets
 import os
 from authlib.integrations.flask_client import OAuth
+from utils import log_user_login, log_user_logout
 
 
 class AuthManager:
@@ -177,7 +178,7 @@ class AuthManager:
             display_roles = self._filter_custom_roles(all_roles)
 
             # Сохраняем пользователя в сессии
-            session['user'] = {
+            session_user_data = {
                 'name': user_info.get('preferred_username', user_info.get('email', 'Unknown')),
                 'given_name': user_info.get('given_name', ''),
                 'family_name': user_info.get('family_name', ''),
@@ -188,9 +189,17 @@ class AuthManager:
                 'realm_roles': realm_roles,
                 'client_roles': client_roles
             }
+
+            session['user'] = session_user_data
             session['access_token'] = token['access_token']
             session['id_token'] = token.get('id_token')
             session.permanent = True
+
+            # ЛОГИРОВАНИЕ УСПЕШНОГО ВХОДА
+            try:
+                log_user_login(session_user_data, 'oauth')
+            except Exception as log_error:
+                self.app.logger.error(f"Failed to log user login: {log_error}")
 
             self.app.logger.info(f"User {user_info.get('preferred_username')} logged in successfully")
             self.app.logger.info(f"User roles - All: {all_roles}, Display: {display_roles}")
@@ -208,6 +217,14 @@ class AuthManager:
     def _handle_logout(self):
         """Обработка выхода с переходом на /hello"""
         try:
+            # ЛОГИРОВАНИЕ ВЫХОДА (перед очисткой сессии)
+            user_info = session.get('user')
+            if user_info:
+                try:
+                    log_user_logout(user_info)
+                except Exception as log_error:
+                    self.app.logger.error(f"Failed to log user logout: {log_error}")
+
             # Получаем URL для редиректа после выхода - теперь всегда на /hello
             post_logout_redirect_uri = url_for('hello', _external=True)
             id_token = session.get('id_token')
@@ -225,6 +242,8 @@ class AuthManager:
             session.clear()
             # При ошибке тоже редиректим на /hello
             return redirect(url_for('hello'))
+
+
 
     def _decode_jwt_payload(self, token):
         """Декодирует JWT payload без проверки подписи"""
@@ -245,6 +264,7 @@ class AuthManager:
         except Exception as e:
             self.app.logger.error(f"Token decode error: {str(e)}")
             return {}
+
 
     def _create_logout_url(self, post_logout_redirect_uri, id_token=None):
         """Создает URL для выхода из Keycloak"""

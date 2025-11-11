@@ -3,23 +3,25 @@
 from auth_system import AuthManager, login_required, admin_required, role_required, auth_context_processor, \
     is_authenticated, get_current_user
 import os
-import zipfile
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
 import logging
-import re
-import unicodedata
-from urllib.parse import quote
 from PIL import Image
 import io
 import hashlib
 import shutil
+import time
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 import tempfile
 import atexit
-import json
-from database import db_manager
 from werkzeug.middleware.proxy_fix import ProxyFix
+# Модули приложения
+from utils import safe_folder_name, cleanup_album_thumbnails, log_user_action
+from sync_manager import SyncManager
+from database import db_manager as db_manager
+from zip_processor import ZipProcessor
+from document_generator import init_document_generator, get_document_generator
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -53,16 +55,22 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
+###########  Инициализация модулей  ###############
+document_generator = init_document_generator(base_url, app.config['UPLOAD_FOLDER'])
 
-# --- Вспомогательные функции ---
-def safe_folder_name(name: str) -> str:
-    """Преобразует строку в безопасное имя папки"""
-    if not name:
-        return "unnamed"
-    name = unicodedata.normalize('NFKD', name)
-    name = re.sub(r'[^\w\s-]', '', name, flags=re.UNICODE)
-    name = re.sub(r'[-\s]+', '_', name, flags=re.UNICODE).strip('-_')
-    return name[:255] if name else "unnamed"
+zip_processor = ZipProcessor(
+    upload_folder=app.config['UPLOAD_FOLDER'],
+    base_url=base_url,
+    thumbnail_folder=app.config['THUMBNAIL_FOLDER'],
+    max_workers=16  # Настройте под вашу систему
+)
+
+sync_manager = SyncManager(
+    upload_folder=app.config['UPLOAD_FOLDER'],
+    base_url=base_url,
+    thumbnail_folder=app.config['THUMBNAIL_FOLDER']
+)
+###########  Инициализация модулей конец  ###############
 
 
 def generate_image_hash(file_path):
@@ -114,19 +122,6 @@ def get_thumbnail_path(original_path, size):
         return os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
 
 
-def cleanup_album_thumbnails(album_name):
-    """Очищает все превью для указанного альбома"""
-    try:
-        album_thumb_path = os.path.join(app.config['THUMBNAIL_FOLDER'], album_name)
-        if os.path.exists(album_thumb_path):
-            shutil.rmtree(album_thumb_path)
-            logger.info(f"Cleaned up thumbnails for album: {album_name}")
-        else:
-            logger.info(f"No thumbnails found for album: {album_name}")
-    except Exception as e:
-        logger.error(f"Error cleaning up thumbnails for album {album_name}: {e}")
-
-
 def cleanup_file_thumbnails(filename):
     """Очищает превью для конкретного файла"""
     try:
@@ -160,6 +155,7 @@ def cleanup_file_thumbnails(filename):
 
 
 # Инициализация базы данных
+# Инициализация базы данных
 def init_db():
     """Инициализация базы данных при запуске приложения"""
     max_retries = 5
@@ -167,7 +163,7 @@ def init_db():
 
     for attempt in range(max_retries):
         try:
-            # Проверяем соединение и существование таблицы
+            # Просто проверяем, что таблицы существуют
             result = db_manager.execute_query("""
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
@@ -178,26 +174,11 @@ def init_db():
             table_exists = result[0]['exists'] if result else False
 
             if not table_exists:
-                logger.warning("Table 'files' does not exist. Creating...")
-                db_manager.execute_query('''
-                    CREATE TABLE files (
-                        id SERIAL PRIMARY KEY,
-                        filename TEXT NOT NULL,
-                        album_name TEXT NOT NULL,
-                        article_number TEXT NOT NULL,
-                        public_link TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''', commit=True)
+                logger.warning("Table 'files' does not exist. Database needs initialization.")
+                # В продакшене таблицы должны создаваться через init.sql
+                # Здесь просто логируем предупреждение
 
-                # Создаем индексы
-                db_manager.execute_query('CREATE INDEX idx_files_album_name ON files(album_name)', commit=True)
-                db_manager.execute_query('CREATE INDEX idx_files_article_number ON files(article_number)', commit=True)
-                db_manager.execute_query('CREATE INDEX idx_files_created_at ON files(created_at)', commit=True)
-
-                logger.info("Table 'files' created successfully")
-
-            logger.info("Database initialized successfully")
+            logger.info("Database connection verified successfully")
             return
 
         except Exception as e:
@@ -210,237 +191,66 @@ def init_db():
                 raise
 
 
-# Получение списка альбомов
+# Оптимизированное получение альбомов
 def get_albums():
-    results = db_manager.execute_query("SELECT DISTINCT album_name FROM files", fetch=True)
+    # Используем составной индекс idx_files_album_article
+    results = db_manager.execute_query("""
+        SELECT DISTINCT album_name 
+        FROM files 
+        ORDER BY album_name
+    """, fetch=True)
     return [album['album_name'] for album in results] if results else []
 
-
-# Получение списка артикулов для указанного альбома
+# Оптимизированное получение артикулов
 def get_articles(album_name):
+    # Используем составной индекс idx_files_album_article
     results = db_manager.execute_query(
-        "SELECT DISTINCT article_number FROM files WHERE album_name = %s",
+        "SELECT DISTINCT article_number FROM files WHERE album_name = %s ORDER BY article_number",
         (album_name,),
         fetch=True
     )
     return [article['article_number'] for article in results] if results else []
 
-
-# Получение всех файлов из БД
+# Оптимизированное получение файлов
 def get_all_files():
+    # Используем индекс по created_at
     results = db_manager.execute_query(
-        "SELECT filename, album_name, article_number, public_link, created_at FROM files ORDER BY created_at DESC",
+        """SELECT filename, album_name, article_number, public_link, created_at 
+           FROM files 
+           ORDER BY created_at DESC 
+           LIMIT 1000""",  # Добавляем лимит для больших БД
         fetch=True
     )
     return results if results else []
 
 
-# Синхронизация БД с файловой системой
-def sync_db_with_filesystem():
-    """
-    Синхронизирует базу данных с файловой системой в одной транзакции.
-    """
+# Эндпоинт синхронизации БД (обновленный)
+@app.route('/api/sync', methods=['GET'])
+@login_required
+def api_sync():
     try:
-        # Получаем все файлы из БД в одном запросе
-        db_files_result = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link FROM files",
-            fetch=True
-        )
-        db_files = {row['filename']: {
-            'album_name': row['album_name'],
-            'article_number': row['article_number'],
-            'public_link': row['public_link']
-        } for row in db_files_result} if db_files_result else {}
-
-        # Сканируем файловую систему
-        fs_files = {}
-        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
-
-        for root, dirs, files in os.walk(app.config['UPLOAD_FOLDER']):
-            for file in files:
-                _, ext = os.path.splitext(file.lower())
-                if ext in allowed_extensions:
-                    full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, app.config['UPLOAD_FOLDER']).replace(os.sep, '/')
-
-                    # Определяем альбом и артикул из пути
-                    path_parts = rel_path.split('/')
-                    if len(path_parts) >= 1:
-                        album_name = path_parts[0]
-
-                        # Если файл находится в подпапке (артикуле)
-                        if len(path_parts) >= 3:
-                            article_number = path_parts[1]
-                        else:
-                            # Если файл напрямую в альбоме, используем имя файла без расширения как артикул
-                            article_number = os.path.splitext(file)[0]
-
-                        # Обеспечиваем безопасные имена
-                        album_name = safe_folder_name(album_name)
-                        article_number = safe_folder_name(article_number)
-
-                        encoded_path = quote(rel_path, safe='/')
-                        public_link = f"{base_url}/images/{encoded_path}"
-
-                        fs_files[rel_path] = {
-                            'album_name': album_name,
-                            'article_number': article_number,
-                            'public_link': public_link
-                        }
-
-        # Находим файлы для удаления и добавления
-        files_to_delete = set(db_files.keys()) - set(fs_files.keys())
-        files_to_add = set(fs_files.keys()) - set(db_files.keys())
-
-        # Подготавливаем операции для транзакции
-        operations = []
-
-        # Операция удаления
-        if files_to_delete:
-            delete_query = "DELETE FROM files WHERE filename = ANY(%s)"
-            operations.append((delete_query, (list(files_to_delete),)))
-
-        # Операция вставки
-        if files_to_add:
-            insert_data = []
-            for rel_path in files_to_add:
-                file_info = fs_files[rel_path]
-                insert_data.append((
-                    rel_path,
-                    file_info['album_name'],
-                    file_info['article_number'],
-                    file_info['public_link']
-                ))
-
-            insert_query = """
-                INSERT INTO files (filename, album_name, article_number, public_link) 
-                VALUES (%s, %s, %s, %s)
-            """
-            operations.append((insert_query, insert_data, True))  # True для executemany
-
-        # Выполняем все операции в одной транзакции
-        if operations:
-            db_manager.execute_in_transaction(operations)
-
-        # Очищаем превью для удаленных файлов (вне транзакции, так как это файловые операции)
-        for rel_path in files_to_delete:
-            cleanup_file_thumbnails(rel_path)
-
-        logger.info(f"Sync completed: deleted {len(files_to_delete)} records, added {len(files_to_add)} records")
-        return list(files_to_delete), list(files_to_add)
-
+        deleted, added = sync_manager.sync()
+        return jsonify({
+            'message': 'Synchronization completed successfully',
+            'deleted': deleted,
+            'added': added
+        })
     except Exception as e:
-        logger.error(f"Error in sync_db_with_filesystem: {e}")
-        raise
+        logger.error(f"Error in sync endpoint: {e}")
+        return jsonify({'error': f'Synchronization failed: {str(e)}'}), 500
 
 
-# Обработка ZIP-архива
-def process_zip(zip_path):
+# Новый эндпоинт для статистики синхронизации
+@app.route('/api/sync/stats', methods=['GET'])
+@login_required
+def api_sync_stats():
+    """Возвращает статистику синхронизации"""
     try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_basename = os.path.basename(zip_path)
-            album_name_raw = os.path.splitext(zip_basename)[0]
-            album_name = safe_folder_name(album_name_raw)
-
-            # Очистка превью перед обработкой нового альбома
-            cleanup_album_thumbnails(album_name)
-
-            album_path = os.path.join(app.config['UPLOAD_FOLDER'], album_name)
-            os.makedirs(album_path, exist_ok=True)
-
-            # Извлечение архива
-            zip_ref.extractall(album_path)
-
-            allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
-            files_to_insert = []
-
-            # Собираем все данные для вставки
-            for root, dirs, files in os.walk(album_path):
-                rel_root = os.path.relpath(root, album_path)
-                if rel_root == '.':
-                    continue
-
-                if rel_root.count(os.sep) == 0:
-                    article_folder_raw = os.path.basename(root)
-                    article_folder_norm = safe_folder_name(article_folder_raw)
-
-                    original_article_path = root
-                    normalized_article_path = os.path.join(os.path.dirname(root), article_folder_norm)
-                    if original_article_path != normalized_article_path:
-                        os.rename(original_article_path, normalized_article_path)
-                        root = normalized_article_path
-
-                    if files:
-                        for file_name in files:
-                            file_path = os.path.join(root, file_name)
-                            if os.path.isfile(file_path):
-                                _, ext = os.path.splitext(file_name.lower())
-                                if ext not in allowed_extensions:
-                                    logger.info(f"Skipping non-image file: {file_path}")
-                                    continue
-
-                                relative_file_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER']).replace(
-                                    os.sep, '/')
-                                encoded_path = quote(relative_file_path, safe='/')
-                                public_link = f"{base_url}/images/{encoded_path}"
-
-                                files_to_insert.append((
-                                    relative_file_path,
-                                    album_name,
-                                    article_folder_norm,
-                                    public_link
-                                ))
-
-            # Используем одну транзакцию для всех операций
-            operations = [
-                ("DELETE FROM files WHERE album_name = %s", (album_name,)),
-                ("""INSERT INTO files (filename, album_name, article_number, public_link) 
-                    VALUES (%s, %s, %s, %s)""", files_to_insert, True)  # True указывает на executemany
-            ]
-
-            db_manager.execute_in_transaction(operations)
-
-            logger.info(f"Processed ZIP {zip_path}: inserted {len(files_to_insert)} files")
-            return True
-
+        stats = sync_manager.get_sync_stats()
+        return jsonify(stats)
     except Exception as e:
-        logger.error(f"Error processing ZIP file {zip_path}: {e}")
-        return False
-
-
-def log_user_action(action, resource_type=None, resource_name=None, details=None):
-    """
-    Записывает действие пользователя в базу данных.
-
-    :param action: str - Тип действия (например, 'upload', 'delete_album', 'delete_article')
-    :param resource_type: str - Тип ресурса ('file', 'album', 'article')
-    :param resource_name: str - Имя ресурса
-    :param details: dict - Дополнительные детали (будет сериализовано в JSON)
-    """
-    user = get_current_user()
-    if not user:
-        # Если пользователь не аутентифицирован, можно логировать как анонимное действие
-        # или использовать специальное имя/ID.
-        # В данном примере используем 'anonymous'
-        user_id = 'anonymous'
-        username = 'anonymous'
-    else:
-        user_id = user.get('sub')  # Используем уникальный идентификатор пользователя из OIDC
-        username = user.get('name', user.get('preferred_username', 'unknown_user'))
-
-    details_json = json.dumps(details) if details else None
-
-    query = """
-    INSERT INTO user_actions_log (user_id, username, action, resource_type, resource_name, details)
-    VALUES (%s, %s, %s, %s, %s, %s)
-    """
-    try:
-        db_manager.execute_query(query, (user_id, username, action, resource_type, resource_name, details_json),
-                                 commit=True)
-        logger.info(
-            f"Logged action '{action}' for user '{username}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
-    except Exception as e:
-        logger.error(f"Failed to log action '{action}' for user '{username}': {e}")
+        logger.error(f"Error getting sync stats: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # --- Routes ---
@@ -458,29 +268,13 @@ def hello():
     return render_template('hello.html', base_url=base_url)
 
 
-# Эндпоинт синхронизации БД
-@app.route('/api/sync', methods=['GET'])
-@login_required
-def api_sync():
-    try:
-        deleted, added = sync_db_with_filesystem()
-        return jsonify({
-            'message': 'Synchronization completed successfully',
-            'deleted': deleted,
-            'added': added
-        })
-    except Exception as e:
-        logger.error(f"Error in sync endpoint: {e}")
-        return jsonify({'error': f'Synchronization failed: {str(e)}'}), 500
-
-
 # Эндпоинт для принудительной очистки превью альбома
 @app.route('/api/cleanup-thumbnails/<album_name>', methods=['POST'])
 @login_required
 def api_cleanup_thumbnails(album_name):
     """Принудительная очистка превью для альбома"""
     try:
-        cleanup_album_thumbnails(album_name)
+        cleanup_album_thumbnails(album_name, app.config['THUMBNAIL_FOLDER'])
         return jsonify({'message': f'Thumbnails for album {album_name} cleaned up successfully'})
     except Exception as e:
         logger.error(f"Error cleaning up thumbnails for {album_name}: {e}")
@@ -502,20 +296,29 @@ def upload_zip():
 
     if file:
         original_name = file.filename
-        base_name = os.path.basename(original_name)
-        name_without_ext, _ = os.path.splitext(base_name)
-        safe_zip_name = safe_folder_name(name_without_ext) + '.zip'
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_zip_name)
-        file.save(file_path)
 
-        success = process_zip(file_path)
+        # Обрабатываем прямо из памяти без сохранения на диск
+        logger.info(f"💾 Обработка ZIP из памяти: {original_name}")
+        process_start = time.time()
+
+        # Создаем временный файл в памяти
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            file.save(tmp_file.name)
+            success, result = zip_processor.process_zip(tmp_file.name, original_name)
+            # Удаляем временный файл
+            os.unlink(tmp_file.name)
+
+        process_time = time.time() - process_start
+        logger.info(f"✅ Обработка завершена за {process_time:.2f}s")
 
         if success:
-            os.remove(file_path)
-            log_user_action('upload', 'album', safe_zip_name)
-            return jsonify({'message': 'Files uploaded successfully', 'album_name': safe_folder_name(name_without_ext)})
+            log_user_action('upload', 'album', original_name, {
+                'album_name': result,
+                'original_filename': original_name
+            })
+            return jsonify({'message': 'Files uploaded successfully', 'album_name': result})
         else:
-            return jsonify({'error': 'Failed to process ZIP file'}), 500
+            return jsonify({'error': f'Failed to process ZIP file: {result}'}), 500
 
 
 # API: список всех файлов
@@ -668,121 +471,26 @@ def api_export_xlsx():
             return jsonify({'error': 'No data provided'}), 400
 
         album_name = data.get('album_name')
-        article_name = data.get('article_name')  # Может быть None для всех артикулов
-        export_type = data.get('export_type')  # 'in_row' или 'in_cell'
-        separator = data.get('separator', ', ')  # Разделитель для варианта "в ячейку"
+        article_name = data.get('article_name')
+        export_type = data.get('export_type', 'in_row')
+        separator = data.get('separator', ', ')
 
         if not album_name or not export_type:
             return jsonify({'error': 'Missing required parameters'}), 400
 
-        # Получаем данные из БД
-        if article_name:
-            results = db_manager.execute_query(
-                "SELECT filename, article_number, public_link FROM files WHERE album_name = %s AND article_number = %s ORDER BY article_number, filename",
-                (album_name, article_name),
-                fetch=True
-            )
-        else:
-            results = db_manager.execute_query(
-                "SELECT filename, article_number, public_link FROM files WHERE album_name = %s ORDER BY article_number, filename",
-                (album_name,),
-                fetch=True
-            )
+        # Используем генератор документов
+        temp_filename, download_filename = get_document_generator().generate_xlsx_export(
+            album_name, article_name, export_type, separator
+        )
 
-        if not results:
-            return jsonify({'error': 'No data found for export'}), 404
-
-        # Функция для извлечения числового суффикса из имени файла
-        def extract_suffix(filename):
-            import re
-            # Ищем паттерн: любое количество символов, затем подчеркивание, затем цифры до точки
-            match = re.search(r'(.+)_(\d+)(\.[^.]*)?$', filename)
-            if match:
-                return int(match.group(2))  # Возвращаем числовое значение
-            return 0  # Если суффикс не найден
-
-        # Сортируем результаты по артикулу и числовому суффиксу в имени файла
-        sorted_results = sorted(results, key=lambda x: (x['article_number'], extract_suffix(x['filename'])))
-
-        # Группируем ссылки по артикулам с правильной сортировкой
-        articles_data = {}
-        for row in sorted_results:
-            article = row['article_number']
-            if article not in articles_data:
-                articles_data[article] = []
-            articles_data[article].append(row['public_link'])
-
-        # Создаем Excel файл
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Ссылки на изображения"
-
-        # Стили для шапки
-        header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-
-        if export_type == 'in_row':
-            # Вариант "В строку"
-            # Определяем максимальное количество ссылок
-            max_links = max(len(links) for links in articles_data.values())
-
-            # Создаем шапку
-            headers = ['Артикул'] + [f'Ссылка {i + 1}' for i in range(max_links)]
-            for col, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = header_font
-                cell.fill = header_fill
-
-            # Заполняем данные (уже отсортированные)
-            for row, (article, links) in enumerate(articles_data.items(), 2):
-                ws.cell(row=row, column=1, value=article)
-                for col, link in enumerate(links, 2):
-                    ws.cell(row=row, column=col, value=link)
-
-        elif export_type == 'in_cell':
-            # Вариант "В ячейку"
-            headers = ['Артикул', 'Ссылки']
-            for col, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = header_font
-                cell.fill = header_fill
-
-            # Заполняем данные (уже отсортированные)
-            for row, (article, links) in enumerate(articles_data.items(), 2):
-                ws.cell(row=row, column=1, value=article)
-                # Объединяем ссылки через разделитель (уже отсортированные)
-                links_text = separator.join(links)
-                ws.cell(row=row, column=2, value=links_text)
-
-        # Авто-ширина колонок
-        for column in ws.columns:
-            max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
-
-        # Сохраняем файл во временную директорию
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
-            wb.save(tmp_file.name)
-            tmp_filename = tmp_file.name
-
-        # Генерируем имя файла
-        filename = f"links_{album_name}"
-        if article_name:
-            filename += f"_{article_name}"
-        filename += ".xlsx"
+        if temp_filename is None:
+            return jsonify({'error': download_filename}), 500  # download_filename содержит сообщение об ошибке
 
         # Отправляем файл
         response = send_file(
-            tmp_filename,
+            temp_filename,
             as_attachment=True,
-            download_name=filename,
+            download_name=download_filename,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
@@ -790,15 +498,107 @@ def api_export_xlsx():
         @response.call_on_close
         def remove_temp_file():
             try:
-                os.unlink(tmp_filename)
+                os.unlink(temp_filename)
             except Exception as e:
-                logger.error(f"Error removing temporary file {tmp_filename}: {e}")
+                logger.error(f"Error removing temporary file {temp_filename}: {e}")
 
         return response
 
     except Exception as e:
         logger.error(f"Error creating XLSX file: {e}")
         return jsonify({'error': f'Failed to create XLSX file: {str(e)}'}), 500
+
+##################################################
+# Добавить новые эндпоинты для других форматов экспорта
+@app.route('/api/export-csv', methods=['POST'])
+@login_required
+def api_export_csv():
+    """Создание CSV документа с ссылками"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        album_name = data.get('album_name')
+        article_name = data.get('article_name')
+        separator = data.get('separator', ',')
+
+        if not album_name:
+            return jsonify({'error': 'Album name is required'}), 400
+
+        temp_filename, download_filename = get_document_generator().generate_csv_export(
+            album_name, article_name, separator
+        )
+
+        if temp_filename is None:
+            return jsonify({'error': download_filename}), 500
+
+        response = send_file(
+            temp_filename,
+            as_attachment=True,
+            download_name=download_filename,
+            mimetype='text/csv'
+        )
+
+        @response.call_on_close
+        def remove_temp_file():
+            try:
+                os.unlink(temp_filename)
+            except Exception as e:
+                logger.error(f"Error removing temporary CSV file: {e}")
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error creating CSV file: {e}")
+        return jsonify({'error': f'Failed to create CSV file: {str(e)}'}), 500
+
+@app.route('/api/export-text', methods=['POST'])
+@login_required
+def api_export_text():
+    """Создание текстового документа со списком файлов"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        album_name = data.get('album_name')
+        article_name = data.get('article_name')
+        export_format = data.get('format', 'txt')  # 'txt' или 'md'
+
+        if not album_name:
+            return jsonify({'error': 'Album name is required'}), 400
+
+        temp_filename, download_filename = get_document_generator().generate_file_list_export(
+            album_name, article_name, export_format
+        )
+
+        if temp_filename is None:
+            return jsonify({'error': download_filename}), 500
+
+        mimetype = 'text/markdown' if export_format == 'md' else 'text/plain'
+
+        response = send_file(
+            temp_filename,
+            as_attachment=True,
+            download_name=download_filename,
+            mimetype=mimetype
+        )
+
+        @response.call_on_close
+        def remove_temp_file():
+            try:
+                os.unlink(temp_filename)
+            except Exception as e:
+                logger.error(f"Error removing temporary text file: {e}")
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error creating text file: {e}")
+        return jsonify({'error': f'Failed to create text file: {str(e)}'}), 500
+
+    ##################################################
 
 
 @app.route('/api/delete-album/<album_name>', methods=['DELETE'])
@@ -833,7 +633,7 @@ def api_delete_album(album_name):
             logger.info(f"Deleted album directory: {album_path}")
 
         # Удаляем превью альбома
-        cleanup_album_thumbnails(album_name)
+        cleanup_album_thumbnails(album_name, app.config['THUMBNAIL_FOLDER'])
 
         # Удаляем папку превью если осталась
         if os.path.exists(thumbnail_album_path):
@@ -890,7 +690,7 @@ def api_delete_article(album_name, article_name):
             logger.info(f"Deleted article thumbnails directory: {thumbnail_article_path}")
 
         # Синхронизируем БД после удаления
-        sync_db_with_filesystem()
+        # sync_manager.sync()
         log_user_action('delete_article', 'article', f"{album_name}/{article_name}",
                         {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
         return jsonify({'message': f'Артикул "{article_name}" в альбоме "{album_name}" успешно удален'})

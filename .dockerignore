@@ -6,6 +6,6 @@ postgres_data
 __pycache__
 create_src.py
 docker-compose.yml
-LICENSE.txt
 init.sql
 nginx.conf
+.env

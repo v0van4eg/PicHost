@@ -29,11 +29,9 @@ def load_gitignore_rules(startpath):
     # Добавляем правила для игнорирования
     ignore_rules.append("__pycache__")
     ignore_rules.append("create_src.py")
-    ignore_rules.append("text.txt")
     ignore_rules.append("Исходники.txt")
     ignore_rules.append("Readme.md")
     ignore_rules.append("favicon.ico")
-    # ignore_rules.append("thumbnails/*")
     ignore_rules.append("LICENSE.txt")
     return ignore_rules
 

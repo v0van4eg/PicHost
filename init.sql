@@ -1,6 +1,6 @@
 -- init.sql
 
--- Таблица файлов...
+-- Таблица файлов
 CREATE TABLE IF NOT EXISTS files (
     id SERIAL PRIMARY KEY,
     filename TEXT NOT NULL,
@@ -10,27 +10,36 @@ CREATE TABLE IF NOT EXISTS files (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ОСНОВНЫЕ ИНДЕКСЫ
 CREATE INDEX IF NOT EXISTS idx_files_album_name ON files(album_name);
 CREATE INDEX IF NOT EXISTS idx_files_article_number ON files(article_number);
 CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);
 
--- Добавляем комментарий к таблице
-COMMENT ON TABLE files IS 'Table for storing image file information';
+-- ОПТИМИЗИРОВАННЫЕ СОСТАВНЫЕ ИНДЕКСЫ ДЛЯ ЧАСТЫХ ЗАПРОСОВ
+CREATE INDEX IF NOT EXISTS idx_files_album_article ON files(album_name, article_number);
+CREATE INDEX IF NOT EXISTS idx_files_album_created ON files(album_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_files_article_album ON files(article_number, album_name);
 
--- Новая таблица для журналирования действий пользователей
+-- УНИКАЛЬНЫЙ ИНДЕКС ДЛЯ ПРЕДОТВРАЩЕНИЯ ДУБЛИКАТОВ
+CREATE UNIQUE INDEX IF NOT EXISTS idx_files_unique ON files(filename, album_name);
+
+-- Таблица логов с оптимизированными индексами
 CREATE TABLE IF NOT EXISTS user_actions_log (
     id SERIAL PRIMARY KEY,
-    user_id TEXT, -- Используем sub (subject) из OIDC
-    username TEXT NOT NULL, -- Имя пользователя (например, preferred_username)
-    action TEXT NOT NULL, -- Тип действия (например, 'upload', 'delete_album', 'delete_article')
-    resource_type TEXT, -- Тип ресурса ('file', 'album', 'article')
-    resource_name TEXT, -- Имя ресурса (например, имя альбома или артикула)
-    details JSONB, -- Дополнительные детали в формате JSON (например, список удаленных файлов)
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Время действия
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    action TEXT NOT NULL,
+    resource_type TEXT,
+    resource_name TEXT,
+    details JSONB,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Индекс для быстрой выборки по времени
-CREATE INDEX IF NOT EXISTS idx_user_actions_log_timestamp ON user_actions_log(timestamp);
+-- ОПТИМИЗИРОВАННЫЕ ИНДЕКСЫ ДЛЯ ЛОГОВ
+CREATE INDEX IF NOT EXISTS idx_user_actions_user_id ON user_actions_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_actions_timestamp ON user_actions_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_user_actions_composite ON user_actions_log(action, timestamp DESC);
 
--- Комментарий к таблице
-COMMENT ON TABLE user_actions_log IS 'Log of user actions for audit and monitoring';
+-- Настройки для производительности (опционально)
+ALTER TABLE files SET (fillfactor = 90);
+ALTER TABLE user_actions_log SET (fillfactor = 85);

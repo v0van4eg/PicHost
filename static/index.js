@@ -576,7 +576,7 @@ async function deleteAlbum(albumName) {
         }
 
         const result = await response.json();
-        alert(result.message);
+//        alert(result.message);
 
         // Обновляем интерфейс
         await loadAlbums();
@@ -605,7 +605,7 @@ async function deleteArticle(albumName, articleName) {
         }
 
         const result = await response.json();
-        alert(result.message);
+//        alert(result.message);
 
         // Обновляем интерфейс
         await loadArticles(albumName);
