@@ -39,8 +39,8 @@ app.context_processor(auth_context_processor)
 
 app.config['UPLOAD_FOLDER'] = 'images'
 app.config['THUMBNAIL_FOLDER'] = 'thumbnails'
-app.config['THUMBNAIL_SIZE'] = (120, 120)  # Размер превью
-app.config['PREVIEW_SIZE'] = (400, 400)  # Размер для предпросмотра
+app.config['THUMBNAIL_SIZE'] = (96, 96)  # Размер превью
+app.config['PREVIEW_SIZE'] = (600, 600)  # Размер для предпросмотра
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 * 1024  # 16GB
 
 # Создаем папки если их нет

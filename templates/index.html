@@ -28,10 +28,19 @@
             height: 100%;
         }
         header {
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 10px;
             margin-top: 0px;
             flex-shrink: 0;
+            position: relative;
+        }
+        .header-left {
+            text-align: left;
+        }
+        .header-right {
+            text-align: right;
         }
         h1 {
             font-size: 2.2rem;
@@ -41,6 +50,19 @@
         .subtitle {
             color: #6c757d;
             font-size: 1.0rem;
+        }
+        .user-info {
+            color: #495057;
+            font-size: 0.75rem;
+        }
+        .user-info a {
+            color: #3498db;
+            text-decoration: none;
+            margin-left: 6px;
+            font-size: 0.75rem;
+        }
+        .user-info a:hover {
+            text-decoration: underline;
         }
         .columns {
             display: flex;
@@ -186,7 +208,7 @@
             padding: 10px 15px;
             margin: 10px 0 5px 0;
             font-weight: bold;
-            color: #495057;
+            color: #ffffff;
             border-left: 4px solid #3498db;
             border-radius: 4px;
             flex-shrink: 0;
@@ -314,6 +336,14 @@
             }
             .link-preview img {
                 align-self: center;
+            }
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .header-right {
+                align-self: flex-end;
             }
         }
 
@@ -642,17 +672,20 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <h2>📁 PicHost — Хостинг изображений</h2>
-            <p class="subtitle">Загрузите ZIP-архив с изображениями для получения прямых ссылок</p>
-            <div style="margin-top: 10px;">
-                {% if current_user %}
-                    <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }} | </span>
-                    <a href="/logout" style="color: #3498db;">Выйти</a>
-                    <a href="/profile" style="color: #3498db;">Профиль</a>
-                {% else %}
-                    <a href="/login" style="color: #3498db;">🔐 Войти</a>
-                {% endif %}
+        <header style="display: flex; justify-content: center; align-items: center; position: relative;">
+            <div style="text-align: center;">
+                <h2>📁 PicHost — Хостинг изображений</h2>
+            </div>
+            <div style="position: absolute; right: 20px; background: #f8f9fa; padding: 6px 12px; border-radius: 6px; border: 1px solid #dee2e6; font-size: 0.85rem;">
+                <div class="user-info">
+                    {% if current_user %}
+                        <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }} | </span>
+                        <a href="/profile">Профиль</a>
+                        <a href="/logout">Выйти</a>
+                    {% else %}
+                        <a href="/login">🔐 Войти</a>
+                    {% endif %}
+                </div>
             </div>
         </header>
         <div class="columns">
