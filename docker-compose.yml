@@ -34,7 +34,6 @@ services:
       - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
       - OAUTH_METADATA_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
       - OAUTH_SCOPE=${OAUTH_SCOPE}
-      - OAUTH_CODE_CHALLENGE_METHOD=${OAUTH_CODE_CHALLENGE_METHOD}
       # Fallback OAuth URLs
       - OAUTH_BASE_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect
       - OAUTH_AUTHORIZE_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth

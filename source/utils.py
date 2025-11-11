@@ -107,6 +107,70 @@ def get_client_info():
         }
 
 
+# utils.py - исправленные функции логирования
+
+def log_user_login(user_info, login_method='oauth'):
+    """
+    Специальная функция для логирования успешного входа пользователя
+
+    :param user_info: dict - Информация о пользователе
+    :param login_method: str - Метод входа ('oauth', 'form', etc.)
+    """
+    user_id = user_info.get('sub')
+    username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
+
+    # Получаем полное имя пользователя
+    given_name = user_info.get('given_name', '')
+    family_name = user_info.get('family_name', '')
+    full_name = f"{given_name} {family_name}".strip()
+    display_name = full_name if full_name else username
+
+    details = {
+        'ip_address': get_client_info().get('ip_address', 'Unknown'),
+        'email': user_info.get('email', ''),
+        'given_name': given_name,
+        'family_name': family_name
+    }
+
+    log_user_action(
+        action='login',
+        resource_type='user',
+        resource_name=display_name,
+        details=details,
+        user=user_info
+    )
+
+
+def log_user_logout(user_info):
+    """
+    Специальная функция для логирования выхода пользователя
+    :param user_info: dict - Информация о пользователе
+    """
+    user_id = user_info.get('sub')
+    username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
+
+    # Получаем полное имя пользователя
+    given_name = user_info.get('given_name', '')
+    family_name = user_info.get('family_name', '')
+    full_name = f"{given_name} {family_name}".strip()
+    display_name = full_name if full_name else username
+
+    details = {
+        'ip_address': get_client_info().get('ip_address', 'Unknown'),
+        'email': user_info.get('email', ''),
+        'given_name': given_name,
+        'family_name': family_name
+    }
+
+    log_user_action(
+        action='logout',
+        resource_type='user',
+        resource_name=display_name,
+        details=details,
+        user=user_info
+    )
+
+
 def log_user_action(action, resource_type=None, resource_name=None, details=None, user=None, request_info=None):
     """
     Записывает действие пользователя в базу данных.
@@ -126,9 +190,16 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
         # Если пользователь не аутентифицирован, логируем как анонимное действие
         user_id = 'anonymous'
         username = 'anonymous'
+        display_name = 'Анонимный пользователь'
     else:
         user_id = user.get('sub')  # Используем уникальный идентификатор пользователя из OIDC
         username = user.get('name', user.get('preferred_username', 'unknown_user'))
+
+        # Формируем отображаемое имя
+        given_name = user.get('given_name', '')
+        family_name = user.get('family_name', '')
+        full_name = f"{given_name} {family_name}".strip()
+        display_name = full_name if full_name else username
 
     # Получаем информацию о клиенте, если не предоставлена
     if request_info is None:
@@ -138,8 +209,11 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
     if details is None:
         details = {}
 
-    details.update(request_info)
+    # Убедимся, что IP адрес всегда включен в детали
+    if 'ip_address' not in details:
+        details['ip_address'] = request_info.get('ip_address', 'Unknown')
 
+    # Используем json.dumps с ensure_ascii=False для корректного отображения кириллицы
     details_json = json.dumps(details, ensure_ascii=False) if details else None
 
     query = """
@@ -147,60 +221,9 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
     VALUES (%s, %s, %s, %s, %s, %s)
     """
     try:
-        db_manager.execute_query(query, (user_id, username, action, resource_type, resource_name, details_json),
+        db_manager.execute_query(query, (user_id, display_name, action, resource_type, resource_name, details_json),
                                  commit=True)
         logger.info(
-            f"Logged action '{action}' for user '{username}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
+            f"Logged action '{action}' for user '{display_name}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
     except Exception as e:
-        logger.error(f"Failed to log action '{action}' for user '{username}': {e}")
-
-
-def log_user_login(user_info, login_method='oauth'):
-    """
-    Специальная функция для логирования успешного входа пользователя
-
-    :param user_info: dict - Информация о пользователе
-    :param login_method: str - Метод входа ('oauth', 'form', etc.)
-    """
-    user_id = user_info.get('sub')
-    username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
-
-    details = {
-        # 'login_method': login_method,
-        # 'roles': user_info.get('roles', []),
-        # 'display_roles': user_info.get('display_roles', []),
-        'given_name': user_info.get('given_name', ''),
-        'family_name': user_info.get('family_name', ''),
-        'email': user_info.get('email', '')
-    }
-
-    log_user_action(
-        action='login',
-        resource_type='Пользователь',
-        resource_name=username,
-        details=details,
-        user=user_info.get('ip_address')
-    )
-
-
-def log_user_logout(user_info):
-    """
-    Специальная функция для логирования выхода пользователя
-    :param user_info: dict - Информация о пользователе
-    """
-    user_id = user_info.get('sub')
-    username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
-
-    details = {
-        'given_name': user_info.get('given_name', ''),
-        'family_name': user_info.get('family_name', ''),
-        'email': user_info.get('email', '')
-    }
-
-    log_user_action(
-        action='logout',
-        resource_type='user',
-        resource_name=username,
-        details=details,
-        user=user_info
-    )
+        logger.error(f"Failed to log action '{action}' for user '{display_name}': {e}")

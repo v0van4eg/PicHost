@@ -1,3 +1,4 @@
+<!-- templates/logs.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -5,22 +6,27 @@
     <title>Журнал Действий - Админ-панель</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
-        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 1400px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #333; }
         .filters { margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px; }
         .filters label { display: inline-block; margin-right: 10px; }
         .filters input, .filters select { padding: 5px; margin: 0 5px 10px 0; border: 1px solid #ccc; border-radius: 4px; }
         .filters button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
         .filters button:hover { background-color: #0056b3; }
-        .log-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .log-table th, .log-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        .log-table th { background-color: #f2f2f2; }
+        .log-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; }
+        .log-table th, .log-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .log-table th { background-color: #f2f2f2; position: sticky; top: 0; }
         .log-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .log-table tr:hover { background-color: #f1f1f1; }
         .pagination { margin-top: 20px; text-align: center; }
         .pagination a { padding: 8px 16px; text-decoration: none; border: 1px solid #ddd; color: #007bff; }
         .pagination a.active { background-color: #007bff; color: white; }
         .pagination a:hover:not(.active) { background-color: #e9ecef; }
-        .details { max-width: 300px; word-wrap: break-word; }
+        .details { max-width: 300px; word-wrap: break-word; font-family: monospace; font-size: 0.8em; }
+        .user-column { min-width: 150px; }
+        .action-column { min-width: 100px; }
+        .time-column { min-width: 140px; }
+        .resource-column { min-width: 120px; }
     </style>
 </head>
 <body>
@@ -48,17 +54,18 @@
                 <input type="date" id="date_to" name="date_to" value="{{ date_to or '' }}">
 
                 <button type="submit">Применить фильтры</button>
+                <a href="{{ url_for('admin_logs') }}" style="margin-left: 10px; color: #6c757d;">Сбросить</a>
             </form>
         </div>
 
         <table class="log-table">
             <thead>
                 <tr>
-                    <th>Время</th>
-                    <th>Пользователь (ID)</th>
-                    <th>Действие</th>
-                    <th>Тип Ресурса</th>
-                    <th>Имя Ресурса</th>
+                    <th class="time-column">Время</th>
+                    <th class="user-column">Пользователь</th>
+                    <th class="action-column">Действие</th>
+                    <th class="resource-column">Тип Ресурса</th>
+                    <th class="resource-column">Имя Ресурса</th>
                     <th>Детали</th>
                 </tr>
             </thead>
@@ -66,15 +73,50 @@
                 {% for log in logs %}
                 <tr>
                     <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</td>
-                    <td>{{ log.username }} ({{ log.user_id[:8] if log.user_id else 'N/A' }})</td>
-                    <td>{{ log.action }}</td>
-                    <td>{{ log.resource_type or 'N/A' }}</td>
-                    <td>{{ log.resource_name or 'N/A' }}</td>
-                    <td class="details">{% if log.details %}{{ log.details | tojson(indent=2) }}{% else %}N/A{% endif %}</td>
+                    <td><strong>{{ log.username }}</strong><br><small style="color: #666;">ID: {{ log.user_id[:8] if log.user_id else 'N/A' }}</small></td>
+                    <td>
+                        <span style="padding: 2px 6px; border-radius: 3px;
+                            {% if log.action == 'login' %}background: #d4edda; color: #155724;
+                            {% elif log.action == 'logout' %}background: #f8d7da; color: #721c24;
+                            {% elif log.action == 'upload' %}background: #cce7ff; color: #004085;
+                            {% else %}background: #e2e3e5; color: #383d41;{% endif %}">
+                            {{ log.action }}
+                        </span>
+                    </td>
+                    <td>{{ log.resource_type or '—' }}</td>
+                    <td>{{ log.resource_name or '—' }}</td>
+                    <td class="details">
+                        {% if log.details %}
+                            {% set details_dict = log.details %}
+                            {% if details_dict is string %}
+                                {{ details_dict }}
+                            {% else %}
+                                {% for key, value in details_dict.items() %}
+                                    {% if key == 'ip_address' %}
+                                        <strong>IP:</strong> {{ value }}<br>
+                                    {% elif key == 'album_name' %}
+                                        <strong>Альбом:</strong> {{ value }}<br>
+                                    {% elif key == 'original_filename' %}
+                                        <strong>Файл:</strong> {{ value }}<br>
+                                    {% elif key == 'email' %}
+                                        <strong>Email:</strong> {{ value }}<br>
+                                    {% elif key == 'given_name' %}
+                                        <strong>Имя:</strong> {{ value }}<br>
+                                    {% elif key == 'family_name' %}
+                                        <strong>Фамилия:</strong> {{ value }}<br>
+                                    {% else %}
+                                        <strong>{{ key }}:</strong> {{ value }}<br>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" style="text-align: center;">Нет записей журнала.</td>
+                    <td colspan="6" style="text-align: center; padding: 40px;">Нет записей журнала для отображения.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -93,6 +135,10 @@
             {% endfor %}
         </div>
         {% endif %}
+
+        <div style="margin-top: 20px; color: #6c757d; font-size: 0.9em;">
+            Всего записей: {{ total_count }}
+        </div>
     </div>
 </body>
 </html>
