@@ -972,8 +972,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Показываем оверлей когда загрузка почти завершена
                 if (percentComplete > 95) {
                     showLoadingOverlay(
-                        'Начинаем обработку...',
-                        'Загрузка завершена. Начинаем распаковку архива.'
+                        'Загрузка завершена.',
+                        'Распаковываем файлы и создаем ссылки. Это может занять несколько минут...'
                     );
                 }
             }
@@ -982,8 +982,8 @@ document.addEventListener('DOMContentLoaded', function() {
         xhr.addEventListener('load', function() {
             progressContainer.style.display = 'none';
             showLoadingOverlay(
-                'Обработка архива',
-                'Распаковываем файлы и создаем превью. Это может занять несколько минут...'
+                'Кукареку!',
+                'Кукареку! Получаем ответ от сервера...'
             );
 
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -993,7 +993,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         let albumName = data.album_name || file.name.replace(/\.zip$/i, '');
                         currentAlbumName = albumName;
 
-                        updateLoadingOverlay('final', 'Загрузка завершена!', 'Обновляем список файлов...');
+                        updateLoadingOverlay('final', 'Всё готово!', 'Обновляем список файлов...');
 
                         setTimeout(() => {
                             showFilesForAlbum(albumName).then(() => {
