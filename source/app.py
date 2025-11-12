@@ -263,8 +263,14 @@ def api_stats():
         import shutil
         from pathlib import Path
 
-        # Статистика дискового пространства
-        total, used, free = shutil.disk_usage("/")
+        # Статистика дискового пространства для папки /mnt/storage
+        storage_path = "/mnt/storage"
+        try:
+            total, used, free = shutil.disk_usage(storage_path)
+        except FileNotFoundError:
+            # Если папка /mnt/storage не существует, используем корень
+            total, used, free = shutil.disk_usage("/")
+            storage_path = "/"
 
         # Статистика файлов в БД
         db_stats = db_manager.execute_query(
@@ -297,7 +303,8 @@ def api_stats():
                 'total': total,
                 'used': used,
                 'free': free,
-                'percent_used': round((used / total) * 100, 1)
+                'percent_used': round((used / total) * 100, 1),
+                'storage_path': storage_path
             },
             'files': {
                 'total_files': db_stats[0]['total_files'] if db_stats else 0,
