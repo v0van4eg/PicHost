@@ -66,6 +66,8 @@ async function loadStats() {
         if (!response.ok) throw new Error('Failed to load stats');
         const data = await response.json();
 
+        console.log('Raw stats response:', data); // Отладочный вывод
+
         if (data.error) {
             throw new Error(data.error);
         }
@@ -99,43 +101,79 @@ function updateStatsDisplay(statsData, error = null) {
         return;
     }
 
-    const { disk_space, files } = statsData;
+    // Проверяем новую структуру данных с disk_stats
+    const { disk_stats, files } = statsData;
+
+    console.log('Stats data received:', statsData); // Для отладки
+
+    // Если disk_stats не существует, используем старую структуру для обратной совместимости
+    let mainStats = null;
+    let mainMountPoint = '/';
+
+    if (disk_stats && Object.keys(disk_stats).length > 0) {
+        // Находим основную точку монтирования (предпочтительно /mnt/storage)
+        const priorityMountPoints = ['/mnt/storage', '/mnt', '/storage', '/data'];
+
+        for (const mountPoint of priorityMountPoints) {
+            if (disk_stats[mountPoint]) {
+                mainMountPoint = mountPoint;
+                mainStats = disk_stats[mountPoint];
+                break;
+            }
+        }
+
+        // Если не нашли приоритетные, берем первую доступную
+        if (!mainStats && Object.keys(disk_stats).length > 0) {
+            mainMountPoint = Object.keys(disk_stats)[0];
+            mainStats = disk_stats[mainMountPoint];
+        }
+    } else {
+        // Обратная совместимость со старой структурой disk_space
+        if (statsData.disk_space) {
+            mainStats = statsData.disk_space;
+            mainMountPoint = statsData.disk_space.mount_point || '/';
+        }
+    }
 
     // Обновляем информацию о дисковом пространстве
-    if (diskBarFill) {
-        diskBarFill.style.width = `${disk_space.percent_used}%`;
+    if (mainStats && diskBarFill && diskUsage) {
+        const percentUsed = mainStats.percent_used || 0;
+        diskBarFill.style.width = `${percentUsed}%`;
 
         // Меняем цвет в зависимости от заполненности
-        if (disk_space.percent_used > 90) {
+        if (percentUsed > 90) {
             diskBarFill.style.background = '#e74c3c'; // Красный
-        } else if (disk_space.percent_used > 70) {
+        } else if (percentUsed > 70) {
             diskBarFill.style.background = '#f39c12'; // Оранжевый
         } else {
             diskBarFill.style.background = '#2ecc71'; // Зеленый
         }
-    }
 
-    if (diskUsage) {
-        diskUsage.textContent = `${disk_space.percent_used}% (${formatBytes(disk_space.free)} свободно)`;
+        diskUsage.textContent = `${mainMountPoint}: ${percentUsed}% (${formatBytes(mainStats.free)} свободно)`;
+    } else {
+        if (diskUsage) diskUsage.textContent = 'Статистика диска недоступна';
+        if (diskBarFill) diskBarFill.style.width = '0%';
     }
 
     // Обновляем информацию о файлах
-    if (totalFiles) {
-        totalFiles.textContent = files.total_files.toLocaleString();
+    if (totalFiles && files) {
+        totalFiles.textContent = files.total_files ? files.total_files.toLocaleString() : '0';
+    } else if (totalFiles) {
+        totalFiles.textContent = '—';
     }
 
-    if (totalAlbums) {
-        totalAlbums.textContent = files.total_albums.toLocaleString();
+    if (totalAlbums && files) {
+        totalAlbums.textContent = files.total_albums ? files.total_albums.toLocaleString() : '0';
+    } else if (totalAlbums) {
+        totalAlbums.textContent = '—';
     }
 
-    if (imagesSize) {
-        imagesSize.textContent = formatBytes(files.images_size);
-    }
-
-    if (thumbnailsSize) {
-        thumbnailsSize.textContent = formatBytes(files.thumbnails_size);
-    }
+    // Скрываем ненужные поля
+    if (imagesSize) imagesSize.style.display = 'none';
+    if (thumbnailsSize) thumbnailsSize.style.display = 'none';
 }
+
+
 
 // Функция инициализации статистики
 function initStats() {

@@ -42,6 +42,10 @@ services:
     volumes:
       - ./images:/app/images
       - ./thumbnails:/app/thumbnails
+      # Монтируем системные папки для доступа к статистике хоста
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/mtab:/host/etc/mtab:ro
     restart: always
     depends_on:
       - db
