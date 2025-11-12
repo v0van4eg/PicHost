@@ -15,6 +15,7 @@ from openpyxl.styles import Font, PatternFill
 import tempfile
 import atexit
 from werkzeug.middleware.proxy_fix import ProxyFix
+
 # Модули приложения
 from utils import safe_folder_name, cleanup_album_thumbnails, log_user_action
 from sync_manager import SyncManager
@@ -62,7 +63,7 @@ zip_processor = ZipProcessor(
     upload_folder=app.config['UPLOAD_FOLDER'],
     base_url=base_url,
     thumbnail_folder=app.config['THUMBNAIL_FOLDER'],
-    max_workers=16  # Настройте под вашу систему
+    max_workers=os.cpu_count()  # Используем все ядра
 )
 
 sync_manager = SyncManager(
@@ -298,7 +299,7 @@ def upload_zip():
         original_name = file.filename
 
         # Обрабатываем прямо из памяти без сохранения на диск
-        logger.info(f"💾 Обработка ZIP из памяти: {original_name}")
+        logger.info(f"💾 Обработка ZIP: {original_name}")
         process_start = time.time()
 
         # Создаем временный файл в памяти

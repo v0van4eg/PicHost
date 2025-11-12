@@ -41,7 +41,7 @@ services:
       - OAUTH_LOGOUT_URL=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout
     volumes:
       - ./images:/app/images
-      - thumbnails:/app/thumbnails
+      - ./thumbnails:/app/thumbnails
     restart: always
     depends_on:
       - db
@@ -58,7 +58,7 @@ services:
       - ./source/static:/app/static:ro
       - ./source/templates:/app/templates:ro
       - ./images:/app/images:rw
-      - thumbnails:/app/thumbnails:rw
+      - ./thumbnails:/app/thumbnails:rw
     restart: always
     depends_on:
       - app
