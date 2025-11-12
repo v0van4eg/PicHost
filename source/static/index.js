@@ -59,6 +59,25 @@ function formatBytes(bytes, decimals = 2) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
+// Функция обновления прогресс-бара диска
+function updateDiskBar(percentUsed) {
+    const diskBarFill = document.getElementById('diskBarFill');
+    if (diskBarFill) {
+        diskBarFill.style.width = `${percentUsed}%`;
+        diskBarFill.setAttribute('data-percent', `${percentUsed}%`);
+
+        // Меняем цвет в зависимости от заполненности
+        if (percentUsed > 90) {
+            diskBarFill.style.background = '#e74c3c';
+        } else if (percentUsed > 70) {
+            diskBarFill.style.background = '#f39c12';
+        } else {
+            diskBarFill.style.background = '#2ecc71';
+        }
+    }
+}
+
+// Функция загрузки статистики
 async function loadStats() {
     try {
         const response = await fetch('/api/stats');
@@ -82,7 +101,7 @@ async function loadStats() {
     }
 }
 
-
+// Функция обновления отображения статистики
 function updateStatsDisplay(statsData, error = null) {
     const diskBarFill = document.getElementById('diskBarFill');
     const diskUsage = document.getElementById('diskUsage');
@@ -126,17 +145,7 @@ function updateStatsDisplay(statsData, error = null) {
     // Обновляем информацию о дисковом пространстве
     if (mainStats && diskBarFill && diskUsage) {
         const percentUsed = mainStats.percent_used || 0;
-        updateDiskBar(percentUsed); // Используем новую функцию
-
-        // Форматируем отображение в GB
-        const usedGB = (mainStats.used / 1024 / 1024 / 1024).toFixed(1);
-        const totalGB = (mainStats.total / 1024 / 1024 / 1024).toFixed(1);
-        const freeGB = (mainStats.free / 1024 / 1024 / 1024).toFixed(1);
-
-        // Обновляем текст под баром
-        diskUsage.textContent = `Свободно ${freeGB} GB из ${totalGB} GB`;
-        diskUsage.title = `Использовано: ${usedGB} GB (${percentUsed}%)`;
-    }
+        updateDiskBar(percentUsed);
 
         // Форматируем отображение в GB
         const usedGB = (mainStats.used / 1024 / 1024 / 1024).toFixed(1);
@@ -165,7 +174,6 @@ function updateStatsDisplay(statsData, error = null) {
         totalAlbums.textContent = '—';
     }
 }
-
 
 // Функция инициализации статистики
 function initStats() {
@@ -199,7 +207,6 @@ function initStats() {
     // Автоматическое обновление статистики каждые 5 минут
     statsInterval = setInterval(loadStats, 5 * 60 * 1000);
 }
-
 
 // Функция для остановки автоматического обновления
 function stopStatsAutoRefresh() {
@@ -516,23 +523,6 @@ async function loadAlbums() {
         albumSelector.innerHTML = '<option value="">-- Ошибка загрузки --</option>';
         updateDeleteButtonsState();
         return [];
-    }
-}
-
-function updateDiskBar(percentUsed) {
-    const diskBarFill = document.getElementById('diskBarFill');
-    if (diskBarFill) {
-        diskBarFill.style.width = `${percentUsed}%`;
-        diskBarFill.setAttribute('data-percent', `${percentUsed}%`);
-
-        // Меняем цвет в зависимости от заполненности
-        if (percentUsed > 90) {
-            diskBarFill.style.background = '#e74c3c';
-        } else if (percentUsed > 70) {
-            diskBarFill.style.background = '#f39c12';
-        } else {
-            diskBarFill.style.background = '#2ecc71';
-        }
     }
 }
 
