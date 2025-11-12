@@ -299,7 +299,7 @@ def api_stats():
                 device_name = mount_point
                 if mount_point == '/':
                     device_name = 'rootfs'
-                elif mount_point == '/mnt/storage':
+                elif mount_point == '/app/images':
                     device_name = 'storage'
 
                 disk_stats[mount_point] = {
