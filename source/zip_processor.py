@@ -311,9 +311,11 @@ class ZipProcessor:
                 # Файл в корне альбома
                 article_number = safe_folder_name(os.path.splitext(filename)[0])
 
-            # Создаем публичную ссылку
+            # Создаем публичную кодированную ссылку
             encoded_path = quote(relative_path.replace(os.sep, '/'), safe='/')
             public_link = f"{self.base_url}/images/{encoded_path}"
+            # Некодированная ссылка
+            # public_link = f"{self.base_url}/images/{relative_path}"
 
             result = (relative_path.replace(os.sep, '/'), album_name, article_number, public_link)
 
