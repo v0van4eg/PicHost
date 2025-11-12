@@ -277,7 +277,7 @@ def api_stats():
 
         # Получаем статистику диска через системные утилиты
         disk_stats = {}
-        target_mount_points = ['/mnt/storage', '/mnt', '/data', '/storage']
+        target_mount_points = ['/mnt/storage', '/mnt', '/media/poly', '/storage']
 
         try:
             # Способ 1: Читаем информацию о смонтированных файловых системах из /host/proc/mounts
@@ -329,7 +329,7 @@ def api_stats():
 
                             # Проверяем все точки монтирования кроме системных
                             if mount_point.startswith(
-                                    ('/mnt', '/media', '/data', '/storage')) and not mount_point.startswith(
+                                    ('/mnt/storage', '/media/poly', '/data', '/storage')) and not mount_point.startswith(
                                     ('/proc', '/sys', '/dev')):
                                 try:
                                     stat = os.statvfs(mount_point)
