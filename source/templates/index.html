@@ -736,7 +736,7 @@
             animation: fadeInScale 0.3s ease;
         }
 
-        /* Добавить в секцию стилей */
+        /* Улучшенные стили для статистики */
         .stats-card {
             background: #ffffff;
             border: 1px solid #e1e5e9;
@@ -756,59 +756,92 @@
         .stats-content {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
 
         .stat-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .stat-item:last-child {
-            border-bottom: none;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .stat-label {
             font-size: 0.85rem;
             color: #6c757d;
-            flex: 1;
+            font-weight: 500;
         }
 
         .stat-value {
             font-size: 0.85rem;
             font-weight: 600;
             color: #2c3e50;
-            text-align: right;
+            text-align: left;
         }
 
         .disk-bar {
             width: 100%;
-            height: 6px;
+            height: 8px;
             background: #e9ecef;
-            border-radius: 3px;
-            margin: 4px 0;
+            border-radius: 4px;
+            margin: 2px 0;
             overflow: hidden;
+            position: relative;
         }
 
         .disk-bar-fill {
             height: 100%;
             background: linear-gradient(90deg, #2ecc71, #f39c12, #e74c3c);
-            border-radius: 3px;
-            transition: width 0.3s ease;
+            border-radius: 4px;
+            transition: width 0.5s ease;
             width: 0%;
+            position: relative;
+        }
+
+        /* Индикатор процентов на баре */
+        .disk-bar-fill::after {
+            content: attr(data-percent);
+            position: absolute;
+            right: 5px;
+            top: -20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .disk-bar:hover .disk-bar-fill::after {
+            opacity: 1;
+        }
+
+        .disk-usage-text {
+            width: 100%;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #495057;
+            margin-top: 4px;
         }
 
         .btn-refresh {
             background: #6c757d;
             padding: 8px 12px;
             font-size: 0.9rem;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
         }
 
         .btn-refresh:hover {
             background: #5a6268;
+        }
+
+        .btn-refresh:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
         }
 
         /* Адаптивность для статистики */
@@ -821,11 +854,6 @@
             .stat-item {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 2px;
-            }
-
-            .stat-value {
-                align-self: flex-end;
             }
         }
 
@@ -874,11 +902,13 @@
                         <h3>📊 Статистика системы</h3>
                         <div class="stats-content">
                             <div class="stat-item">
-                                <span class="stat-label">Дисковое пространство:</span>
+                                <span class="stat-label">Хранилище:</span>
                                 <div class="disk-bar">
                                     <div class="disk-bar-fill" id="diskBarFill"></div>
                                 </div>
-                                <span class="stat-value" id="diskUsage">Загрузка...</span>
+                                <div class="stat-value" id="diskUsage" style="width: 100%; text-align: center; margin-top: 5px; font-size: 0.8rem;">
+                                    Загрузка...
+                                </div>
                             </div>
                             <div class="stat-item">
                                 <span class="stat-label">Всего файлов:</span>
