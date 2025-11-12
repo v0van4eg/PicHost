@@ -10,14 +10,12 @@ import io
 import hashlib
 import shutil
 import time
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
 import tempfile
 import atexit
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Модули приложения
-from utils import safe_folder_name, cleanup_album_thumbnails, log_user_action
+from utils import cleanup_album_thumbnails, log_user_action
 from sync_manager import SyncManager
 from database import db_manager as db_manager
 from zip_processor import ZipProcessor
@@ -611,6 +609,7 @@ def api_export_xlsx():
         logger.error(f"Error creating XLSX file: {e}")
         return jsonify({'error': f'Failed to create XLSX file: {str(e)}'}), 500
 
+
 ##################################################
 # Добавить новые эндпоинты для других форматов экспорта
 @app.route('/api/export-csv', methods=['POST'])
@@ -655,6 +654,7 @@ def api_export_csv():
     except Exception as e:
         logger.error(f"Error creating CSV file: {e}")
         return jsonify({'error': f'Failed to create CSV file: {str(e)}'}), 500
+
 
 @app.route('/api/export-text', methods=['POST'])
 @login_required
