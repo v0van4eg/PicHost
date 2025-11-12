@@ -59,14 +59,15 @@ function formatBytes(bytes, decimals = 2) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
-// Функция загрузки статистики
 async function loadStats() {
     try {
         const response = await fetch('/api/stats');
-        if (!response.ok) throw new Error('Failed to load stats');
-        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
-        console.log('Raw stats response:', data); // Отладочный вывод
+        const data = await response.json();
+        console.log('Raw stats response:', data);
 
         if (data.error) {
             throw new Error(data.error);
@@ -75,22 +76,21 @@ async function loadStats() {
         updateStatsDisplay(data);
         return data;
     } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error('❌ Error loading stats:', error);
         updateStatsDisplay(null, error.message);
         return null;
     }
 }
 
 
-// Функция обновления отображения статистики
 function updateStatsDisplay(statsData, error = null) {
     const diskBarFill = document.getElementById('diskBarFill');
     const diskUsage = document.getElementById('diskUsage');
     const totalFiles = document.getElementById('totalFiles');
     const totalAlbums = document.getElementById('totalAlbums');
 
-    if (!statsData || error) {
-        const errorMessage = error || 'Ошибка загрузки данных';
+    if (!statsData || error || statsData.status === 'error') {
+        const errorMessage = error || statsData?.error || 'Ошибка загрузки данных';
         if (diskUsage) diskUsage.textContent = errorMessage;
         if (totalFiles) totalFiles.textContent = '—';
         if (totalAlbums) totalAlbums.textContent = '—';
@@ -100,11 +100,28 @@ function updateStatsDisplay(statsData, error = null) {
 
     const { disk_stats, files } = statsData;
 
-    console.log('Stats data received:', statsData); // Для отладки
+    console.log('📊 Stats data received:', statsData);
 
-    // Получаем статистику для /mnt/storage или корневой ФС
-    let mainStats = disk_stats['/mnt/storage'] || disk_stats['/'];
-    let mountPoint = mainStats ? (disk_stats['/mnt/storage'] ? '/mnt/storage' : '/') : null;
+    // Получаем первую доступную статистику диска
+    let mainStats = null;
+    let mountPoint = null;
+
+    // Приоритет точек монтирования
+    const mountPriority = ['/mnt/storage', '/app/images', '/images', '/'];
+
+    for (const mp of mountPriority) {
+        if (disk_stats && disk_stats[mp]) {
+            mainStats = disk_stats[mp];
+            mountPoint = mp;
+            break;
+        }
+    }
+
+    // Если не нашли по приоритету, берем первую доступную
+    if (!mainStats && disk_stats && Object.keys(disk_stats).length > 0) {
+        mountPoint = Object.keys(disk_stats)[0];
+        mainStats = disk_stats[mountPoint];
+    }
 
     // Обновляем информацию о дисковом пространстве
     if (mainStats && diskBarFill && diskUsage) {
@@ -120,7 +137,20 @@ function updateStatsDisplay(statsData, error = null) {
             diskBarFill.style.background = '#2ecc71'; // Зеленый
         }
 
-        diskUsage.textContent = `${mountPoint}: ${percentUsed}% (${formatBytes(mainStats.free)} свободно)`;
+        // Форматируем отображение
+        const usedGB = (mainStats.used / 1024 / 1024 / 1024).toFixed(1);
+        const totalGB = (mainStats.total / 1024 / 1024 / 1024).toFixed(1);
+        const freeGB = (mainStats.free / 1024 / 1024 / 1024).toFixed(1);
+
+        let displayText = '';
+        if (mountPoint === '/') {
+            displayText = `Диск: ${percentUsed}% (${freeGB}GB свободно)`;
+        } else {
+            displayText = `${mountPoint}: ${percentUsed}% (${freeGB}GB свободно)`;
+        }
+
+        diskUsage.textContent = displayText;
+        diskUsage.title = `Использовано: ${usedGB}GB из ${totalGB}GB`;
     } else {
         if (diskUsage) diskUsage.textContent = 'Статистика диска недоступна';
         if (diskBarFill) diskBarFill.style.width = '0%';

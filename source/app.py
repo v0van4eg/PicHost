@@ -258,9 +258,10 @@ def api_sync_stats():
 @app.route('/api/stats')
 @login_required
 def api_stats():
-    """Возвращает статистику дискового пространства для /mnt/storage"""
+    """Возвращает статистику дискового пространства"""
     try:
         import os
+        import shutil
 
         # Статистика файлов в БД
         db_stats = db_manager.execute_query(
@@ -274,59 +275,85 @@ def api_stats():
             fetch=True
         )
 
-        # Получаем статистику только для /mnt/storage
         disk_stats = {}
-        target_mount_point = '/mnt/storage'
 
-        try:
-            # Пытаемся получить статистику для /mnt/storage
-            stat = os.statvfs(target_mount_point)
-            total = stat.f_blocks * stat.f_frsize
-            free = stat.f_bfree * stat.f_frsize
-            used = total - free
-            percent_used = (used / total) * 100 if total > 0 else 0
+        # Проверяем различные возможные точки монтирования
+        mount_points_to_check = [
+            '/mnt/storage',
+            '/app/images',  # папка с изображениями в контейнере
+            '/images',  # альтернативный путь
+            '/'  # корневая файловая система как запасной вариант
+        ]
 
-            disk_stats[target_mount_point] = {
-                'total': total,
-                'used': used,
-                'free': free,
-                'percent_used': round(percent_used, 1),
-                'device': '/dev/sda1'
-            }
-            logger.info(f"Successfully got stats for {target_mount_point}")
-
-        except (OSError, IOError) as e:
-            logger.warning(f"Cannot get stats for {target_mount_point}: {e}")
-            # Если /mnt/storage недоступен, используем корневую ФС
+        for mount_point in mount_points_to_check:
             try:
-                stat = os.statvfs('/')
-                total = stat.f_blocks * stat.f_frsize
-                free = stat.f_bfree * stat.f_frsize
-                used = total - free
+                # Используем shutil.disk_usage для получения статистики
+                usage = shutil.disk_usage(mount_point)
+
+                total = usage.total
+                used = usage.used
+                free = usage.free
                 percent_used = (used / total) * 100 if total > 0 else 0
 
-                disk_stats['/'] = {
+                # Определяем устройство/точку монтирования
+                device_name = mount_point
+                if mount_point == '/':
+                    device_name = 'rootfs'
+                elif mount_point == '/mnt/storage':
+                    device_name = 'storage'
+
+                disk_stats[mount_point] = {
                     'total': total,
                     'used': used,
                     'free': free,
                     'percent_used': round(percent_used, 1),
-                    'device': 'rootfs'
+                    'device': device_name
                 }
-                logger.info("Using root filesystem stats as fallback")
-            except (OSError, IOError) as e:
-                logger.error(f"Cannot get fallback stats: {e}")
+
+                logger.info(f"✅ Получена статистика для {mount_point}: {percent_used:.1f}% использовано")
+                break  # Используем первую доступную точку монтирования
+
+            except (OSError, IOError, FileNotFoundError) as e:
+                logger.debug(f"Не удалось получить статистику для {mount_point}: {e}")
+                continue
+
+        # Если ни одна точка монтирования не сработала, пробуем получить статистику для текущей рабочей директории
+        if not disk_stats:
+            try:
+                current_dir = os.getcwd()
+                usage = shutil.disk_usage(current_dir)
+
+                total = usage.total
+                used = usage.used
+                free = usage.free
+                percent_used = (used / total) * 100 if total > 0 else 0
+
+                disk_stats[current_dir] = {
+                    'total': total,
+                    'used': used,
+                    'free': free,
+                    'percent_used': round(percent_used, 1),
+                    'device': 'current_directory'
+                }
+                logger.info(f"✅ Используем статистику текущей директории: {current_dir}")
+            except Exception as e:
+                logger.error(f"❌ Не удалось получить статистику диска: {e}")
 
         return jsonify({
             'disk_stats': disk_stats,
             'files': {
                 'total_files': db_stats[0]['total_files'] if db_stats else 0,
                 'total_albums': album_stats[0]['total_albums'] if album_stats else 0,
-            }
+            },
+            'status': 'success'
         })
 
     except Exception as e:
-        logger.error(f"Error getting stats: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"❌ Ошибка получения статистики: {e}")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
 
 
 # --- Routes ---
