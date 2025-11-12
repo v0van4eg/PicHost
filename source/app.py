@@ -258,9 +258,8 @@ def api_sync_stats():
 @app.route('/api/stats')
 @login_required
 def api_stats():
-    """Возвращает статистику дискового пространства хоста"""
+    """Возвращает статистику дискового пространства для /mnt/storage"""
     try:
-        import json
         import os
 
         # Статистика файлов в БД
@@ -275,107 +274,30 @@ def api_stats():
             fetch=True
         )
 
-        # Получаем статистику диска через системные утилиты
+        # Получаем статистику только для /mnt/storage
         disk_stats = {}
-        target_mount_points = ['/mnt/storage', '/mnt', '/media/poly', '/storage']
+        target_mount_point = '/mnt/storage'
 
         try:
-            # Способ 1: Читаем информацию о смонтированных файловых системах из /host/proc/mounts
-            with open('/host/proc/mounts', 'r') as f:
-                mounts = f.readlines()
+            # Пытаемся получить статистику для /mnt/storage
+            stat = os.statvfs(target_mount_point)
+            total = stat.f_blocks * stat.f_frsize
+            free = stat.f_bfree * stat.f_frsize
+            used = total - free
+            percent_used = (used / total) * 100 if total > 0 else 0
 
-            found_target_mounts = False
+            disk_stats[target_mount_point] = {
+                'total': total,
+                'used': used,
+                'free': free,
+                'percent_used': round(percent_used, 1),
+                'device': '/dev/sda1'
+            }
+            logger.info(f"Successfully got stats for {target_mount_point}")
 
-            for mount in mounts:
-                parts = mount.split()
-                if len(parts) >= 2:
-                    mount_point = parts[1]
-                    device = parts[0]
-
-                    # Ищем целевые точки монтирования
-                    for target in target_mount_points:
-                        if mount_point == target or mount_point.startswith(target + '/'):
-                            try:
-                                stat = os.statvfs(mount_point)
-                                total = stat.f_blocks * stat.f_frsize
-                                free = stat.f_bfree * stat.f_frsize
-                                used = total - free
-                                percent_used = (used / total) * 100 if total > 0 else 0
-
-                                disk_stats[mount_point] = {
-                                    'total': total,
-                                    'used': used,
-                                    'free': free,
-                                    'percent_used': round(percent_used, 1),
-                                    'device': device
-                                }
-                                found_target_mounts = True
-                                logger.info(f"Found target mount point: {mount_point}")
-                            except (OSError, IOError) as e:
-                                logger.warning(f"Cannot get stats for {mount_point}: {e}")
-                                continue
-
-            # Способ 2: Если не нашли целевые точки монтирования, используем /host/etc/mtab
-            if not found_target_mounts:
-                try:
-                    with open('/host/etc/mtab', 'r') as f:
-                        mtab_mounts = f.readlines()
-
-                    for mount in mtab_mounts:
-                        parts = mount.split()
-                        if len(parts) >= 2:
-                            mount_point = parts[1]
-                            device = parts[0]
-
-                            # Проверяем все точки монтирования кроме системных
-                            if mount_point.startswith(
-                                    ('/mnt/storage', '/media/poly', '/data', '/storage')) and not mount_point.startswith(
-                                    ('/proc', '/sys', '/dev')):
-                                try:
-                                    stat = os.statvfs(mount_point)
-                                    total = stat.f_blocks * stat.f_frsize
-                                    free = stat.f_bfree * stat.f_frsize
-                                    used = total - free
-                                    percent_used = (used / total) * 100 if total > 0 else 0
-
-                                    disk_stats[mount_point] = {
-                                        'total': total,
-                                        'used': used,
-                                        'free': free,
-                                        'percent_used': round(percent_used, 1),
-                                        'device': device
-                                    }
-                                    found_target_mounts = True
-                                    logger.info(f"Found mount point from mtab: {mount_point}")
-                                except (OSError, IOError) as e:
-                                    logger.warning(f"Cannot get stats for {mount_point}: {e}")
-                                    continue
-                except (FileNotFoundError, PermissionError) as e:
-                    logger.warning(f"Cannot read /host/etc/mtab: {e}")
-
-            # Способ 3: Если всё еще не нашли, используем корневую файловую систему
-            if not disk_stats:
-                try:
-                    stat = os.statvfs('/')
-                    total = stat.f_blocks * stat.f_frsize
-                    free = stat.f_bfree * stat.f_frsize
-                    used = total - free
-                    percent_used = (used / total) * 100 if total > 0 else 0
-
-                    disk_stats['/'] = {
-                        'total': total,
-                        'used': used,
-                        'free': free,
-                        'percent_used': round(percent_used, 1),
-                        'device': 'rootfs'
-                    }
-                    logger.info("Using root filesystem stats")
-                except (OSError, IOError) as e:
-                    logger.error(f"Cannot get root filesystem stats: {e}")
-
-        except (FileNotFoundError, PermissionError) as e:
-            logger.error(f"Cannot read mount information: {e}")
-            # Fallback: используем корневую ФС
+        except (OSError, IOError) as e:
+            logger.warning(f"Cannot get stats for {target_mount_point}: {e}")
+            # Если /mnt/storage недоступен, используем корневую ФС
             try:
                 stat = os.statvfs('/')
                 total = stat.f_blocks * stat.f_frsize
@@ -390,11 +312,9 @@ def api_stats():
                     'percent_used': round(percent_used, 1),
                     'device': 'rootfs'
                 }
+                logger.info("Using root filesystem stats as fallback")
             except (OSError, IOError) as e:
                 logger.error(f"Cannot get fallback stats: {e}")
-
-        # Логируем найденные точки монтирования для отладки
-        logger.info(f"Found disk stats: {list(disk_stats.keys())}")
 
         return jsonify({
             'disk_stats': disk_stats,
@@ -407,7 +327,6 @@ def api_stats():
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 
 # --- Routes ---

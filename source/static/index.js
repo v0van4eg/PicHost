@@ -81,59 +81,30 @@ async function loadStats() {
     }
 }
 
+
 // Функция обновления отображения статистики
 function updateStatsDisplay(statsData, error = null) {
     const diskBarFill = document.getElementById('diskBarFill');
     const diskUsage = document.getElementById('diskUsage');
     const totalFiles = document.getElementById('totalFiles');
     const totalAlbums = document.getElementById('totalAlbums');
-    const imagesSize = document.getElementById('imagesSize');
-    const thumbnailsSize = document.getElementById('thumbnailsSize');
 
     if (!statsData || error) {
         const errorMessage = error || 'Ошибка загрузки данных';
         if (diskUsage) diskUsage.textContent = errorMessage;
         if (totalFiles) totalFiles.textContent = '—';
         if (totalAlbums) totalAlbums.textContent = '—';
-        if (imagesSize) imagesSize.textContent = '—';
-        if (thumbnailsSize) thumbnailsSize.textContent = '—';
         if (diskBarFill) diskBarFill.style.width = '0%';
         return;
     }
 
-    // Проверяем новую структуру данных с disk_stats
     const { disk_stats, files } = statsData;
 
     console.log('Stats data received:', statsData); // Для отладки
 
-    // Если disk_stats не существует, используем старую структуру для обратной совместимости
-    let mainStats = null;
-    let mainMountPoint = '/';
-
-    if (disk_stats && Object.keys(disk_stats).length > 0) {
-        // Находим основную точку монтирования (предпочтительно /mnt/storage)
-        const priorityMountPoints = ['/mnt/storage', '/mnt', '/storage', '/data'];
-
-        for (const mountPoint of priorityMountPoints) {
-            if (disk_stats[mountPoint]) {
-                mainMountPoint = mountPoint;
-                mainStats = disk_stats[mountPoint];
-                break;
-            }
-        }
-
-        // Если не нашли приоритетные, берем первую доступную
-        if (!mainStats && Object.keys(disk_stats).length > 0) {
-            mainMountPoint = Object.keys(disk_stats)[0];
-            mainStats = disk_stats[mainMountPoint];
-        }
-    } else {
-        // Обратная совместимость со старой структурой disk_space
-        if (statsData.disk_space) {
-            mainStats = statsData.disk_space;
-            mainMountPoint = statsData.disk_space.mount_point || '/';
-        }
-    }
+    // Получаем статистику для /mnt/storage или корневой ФС
+    let mainStats = disk_stats['/mnt/storage'] || disk_stats['/'];
+    let mountPoint = mainStats ? (disk_stats['/mnt/storage'] ? '/mnt/storage' : '/') : null;
 
     // Обновляем информацию о дисковом пространстве
     if (mainStats && diskBarFill && diskUsage) {
@@ -149,7 +120,7 @@ function updateStatsDisplay(statsData, error = null) {
             diskBarFill.style.background = '#2ecc71'; // Зеленый
         }
 
-        diskUsage.textContent = `${mainMountPoint}: ${percentUsed}% (${formatBytes(mainStats.free)} свободно)`;
+        diskUsage.textContent = `${mountPoint}: ${percentUsed}% (${formatBytes(mainStats.free)} свободно)`;
     } else {
         if (diskUsage) diskUsage.textContent = 'Статистика диска недоступна';
         if (diskBarFill) diskBarFill.style.width = '0%';
@@ -167,12 +138,7 @@ function updateStatsDisplay(statsData, error = null) {
     } else if (totalAlbums) {
         totalAlbums.textContent = '—';
     }
-
-    // Скрываем ненужные поля
-    if (imagesSize) imagesSize.style.display = 'none';
-    if (thumbnailsSize) thumbnailsSize.style.display = 'none';
 }
-
 
 
 // Функция инициализации статистики
