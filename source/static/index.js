@@ -22,6 +22,8 @@ let createXlsxBtn, xlsxModal, xlsxTemplateSelect, separatorSelect, generateXlsxB
 let deleteAlbumBtn, deleteArticleBtn;
 // Элемент для оверлея загрузки
 let loadingOverlay;
+// Глобальные переменные для статистики
+let statsInterval = null;
 
 // Конфигурация превью
 const PREVIEW_CONFIG = {
@@ -46,6 +48,135 @@ const Path = {
         return parts[parts.length - 1] || path;
     }
 };
+
+// Функция для форматирования размера в читаемый вид
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// Функция загрузки статистики
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats');
+        if (!response.ok) throw new Error('Failed to load stats');
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        updateStatsDisplay(data);
+        return data;
+    } catch (error) {
+        console.error('Error loading stats:', error);
+        updateStatsDisplay(null, error.message);
+        return null;
+    }
+}
+
+// Функция обновления отображения статистики
+function updateStatsDisplay(statsData, error = null) {
+    const diskBarFill = document.getElementById('diskBarFill');
+    const diskUsage = document.getElementById('diskUsage');
+    const totalFiles = document.getElementById('totalFiles');
+    const totalAlbums = document.getElementById('totalAlbums');
+    const imagesSize = document.getElementById('imagesSize');
+    const thumbnailsSize = document.getElementById('thumbnailsSize');
+
+    if (!statsData || error) {
+        const errorMessage = error || 'Ошибка загрузки данных';
+        if (diskUsage) diskUsage.textContent = errorMessage;
+        if (totalFiles) totalFiles.textContent = '—';
+        if (totalAlbums) totalAlbums.textContent = '—';
+        if (imagesSize) imagesSize.textContent = '—';
+        if (thumbnailsSize) thumbnailsSize.textContent = '—';
+        if (diskBarFill) diskBarFill.style.width = '0%';
+        return;
+    }
+
+    const { disk_space, files } = statsData;
+
+    // Обновляем информацию о дисковом пространстве
+    if (diskBarFill) {
+        diskBarFill.style.width = `${disk_space.percent_used}%`;
+
+        // Меняем цвет в зависимости от заполненности
+        if (disk_space.percent_used > 90) {
+            diskBarFill.style.background = '#e74c3c'; // Красный
+        } else if (disk_space.percent_used > 70) {
+            diskBarFill.style.background = '#f39c12'; // Оранжевый
+        } else {
+            diskBarFill.style.background = '#2ecc71'; // Зеленый
+        }
+    }
+
+    if (diskUsage) {
+        diskUsage.textContent = `${disk_space.percent_used}% (${formatBytes(disk_space.free)} свободно)`;
+    }
+
+    // Обновляем информацию о файлах
+    if (totalFiles) {
+        totalFiles.textContent = files.total_files.toLocaleString();
+    }
+
+    if (totalAlbums) {
+        totalAlbums.textContent = files.total_albums.toLocaleString();
+    }
+
+    if (imagesSize) {
+        imagesSize.textContent = formatBytes(files.images_size);
+    }
+
+    if (thumbnailsSize) {
+        thumbnailsSize.textContent = formatBytes(files.thumbnails_size);
+    }
+}
+
+// Функция инициализации статистики
+function initStats() {
+    const statsCard = document.getElementById('statsCard');
+    const refreshStatsBtn = document.getElementById('refreshStatsBtn');
+
+    if (!statsCard || !refreshStatsBtn) {
+        console.warn('Stats elements not found');
+        return;
+    }
+
+    // Показываем карточку статистики
+    statsCard.style.display = 'block';
+
+    // Загружаем статистику при инициализации
+    loadStats();
+
+    // Обработчик для кнопки обновления
+    refreshStatsBtn.addEventListener('click', () => {
+        refreshStatsBtn.disabled = true;
+        refreshStatsBtn.innerHTML = '<span>Загрузка...</span>';
+
+        loadStats().finally(() => {
+            setTimeout(() => {
+                refreshStatsBtn.disabled = false;
+                refreshStatsBtn.innerHTML = '<span>🔄 Обновить</span>';
+            }, 1000);
+        });
+    });
+
+    // Автоматическое обновление статистики каждые 5 минут
+    statsInterval = setInterval(loadStats, 5 * 60 * 1000);
+}
+
+// Функция для остановки автоматического обновления
+function stopStatsAutoRefresh() {
+    if (statsInterval) {
+        clearInterval(statsInterval);
+        statsInterval = null;
+    }
+}
 
 // --- Система ленивой загрузки изображений ---
 class LazyLoader {
@@ -134,6 +265,10 @@ function initializeElements() {
         console.error('One or more required DOM elements not found!');
         return false;
     }
+
+    // Инициализация статистики
+    initStats();
+
     return true;
 }
 
@@ -1073,4 +1208,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initDeleteButtons();
     updateCreateXlsxButtonState();
     updateDeleteButtonsState();
+
+    // Добавляем очистку интервала при разгрузке страницы
+    window.addEventListener('beforeunload', stopStatsAutoRefresh);
 });

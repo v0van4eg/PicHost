@@ -735,6 +735,100 @@
             display: flex;
             animation: fadeInScale 0.3s ease;
         }
+
+        /* Добавить в секцию стилей */
+        .stats-card {
+            background: #ffffff;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .stats-card h3 {
+            margin: 0 0 12px 0;
+            font-size: 1rem;
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        .stats-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            flex: 1;
+        }
+
+        .stat-value {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #2c3e50;
+            text-align: right;
+        }
+
+        .disk-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            margin: 4px 0;
+            overflow: hidden;
+        }
+
+        .disk-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2ecc71, #f39c12, #e74c3c);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .btn-refresh {
+            background: #6c757d;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+
+        .btn-refresh:hover {
+            background: #5a6268;
+        }
+
+        /* Адаптивность для статистики */
+        @media (max-width: 900px) {
+            .stats-card {
+                margin-top: 15px;
+                padding: 12px;
+            }
+
+            .stat-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 2px;
+            }
+
+            .stat-value {
+                align-self: flex-end;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -775,6 +869,38 @@
                             </div>
                         </div>
                     </form>
+                    <!-- Вставить в column-left, после uploadForm и перед manageBtn -->
+                    <div class="stats-card" id="statsCard" style="display: none;">
+                        <h3>📊 Статистика системы</h3>
+                        <div class="stats-content">
+                            <div class="stat-item">
+                                <span class="stat-label">Дисковое пространство:</span>
+                                <div class="disk-bar">
+                                    <div class="disk-bar-fill" id="diskBarFill"></div>
+                                </div>
+                                <span class="stat-value" id="diskUsage">Загрузка...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Всего файлов:</span>
+                                <span class="stat-value" id="totalFiles">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Всего альбомов:</span>
+                                <span class="stat-value" id="totalAlbums">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Размер изображений:</span>
+                                <span class="stat-value" id="imagesSize">0 MB</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Размер превью:</span>
+                                <span class="stat-value" id="thumbnailsSize">0 MB</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-refresh" id="refreshStatsBtn" style="margin-top: 10px; width: 100%;">
+                            🔄 Обновить
+                        </button>
+                    </div>
                     <button class="btnmanage" id="manageBtn">
                         <span>Управление ссылками</span>
                     </button>

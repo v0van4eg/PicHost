@@ -254,6 +254,64 @@ def api_sync_stats():
         return jsonify({'error': str(e)}), 500
 
 
+# Статус системы
+@app.route('/api/stats')
+@login_required
+def api_stats():
+    """Возвращает статистику дискового пространства и файлов"""
+    try:
+        import shutil
+        from pathlib import Path
+
+        # Статистика дискового пространства
+        total, used, free = shutil.disk_usage("/")
+
+        # Статистика файлов в БД
+        db_stats = db_manager.execute_query(
+            "SELECT COUNT(*) as total_files FROM files",
+            fetch=True
+        )
+
+        # Статистика по альбомам
+        album_stats = db_manager.execute_query(
+            "SELECT COUNT(DISTINCT album_name) as total_albums FROM files",
+            fetch=True
+        )
+
+        # Размер папки с изображениями
+        images_size = 0
+        for root, dirs, files in os.walk(app.config['UPLOAD_FOLDER']):
+            for file in files:
+                file_path = os.path.join(root, file)
+                images_size += os.path.getsize(file_path)
+
+        # Размер папки с превью
+        thumbnails_size = 0
+        for root, dirs, files in os.walk(app.config['THUMBNAIL_FOLDER']):
+            for file in files:
+                file_path = os.path.join(root, file)
+                thumbnails_size += os.path.getsize(file_path)
+
+        return jsonify({
+            'disk_space': {
+                'total': total,
+                'used': used,
+                'free': free,
+                'percent_used': round((used / total) * 100, 1)
+            },
+            'files': {
+                'total_files': db_stats[0]['total_files'] if db_stats else 0,
+                'total_albums': album_stats[0]['total_albums'] if album_stats else 0,
+                'images_size': images_size,
+                'thumbnails_size': thumbnails_size
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # --- Routes ---
 @app.route('/')
 def index():
