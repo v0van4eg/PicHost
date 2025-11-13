@@ -9,7 +9,7 @@ import os
 from authlib.integrations.flask_client import OAuth
 from utils import log_user_login, log_user_logout
 import time
-import logging  # Добавьте этот импорт
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,6 @@ class AuthManager:
     def _get_client_ip(self):
         """Получает IP адрес клиента"""
         try:
-            from flask import request
             if request.environ.get('HTTP_X_FORWARDED_FOR'):
                 return request.environ['HTTP_X_FORWARDED_FOR'].split(',')[0]
             else:
@@ -207,7 +206,12 @@ class AuthManager:
             redirect_uri = url_for('auth_callback', _external=True)
             self.app.logger.info(f"Starting OAuth flow with redirect_uri: {redirect_uri}")
 
-            return self.keycloak.authorize_redirect(redirect_uri, nonce=nonce)
+            # Добавляем параметр для принудительной аутентификации
+            return self.keycloak.authorize_redirect(
+                redirect_uri,
+                nonce=nonce,
+                prompt='login'  # Принудительно запрашивает ввод учетных данных
+            )
         except Exception as e:
             self.app.logger.error(f"Login error: {str(e)}")
             return f'''
@@ -215,6 +219,7 @@ class AuthManager:
             <p>Не удалось инициализировать процесс аутентификации: {str(e)}</p>
             <a href="/">На главную</a>
             ''', 500
+
 
     def _handle_callback(self):
         """Обработка OAuth callback"""
@@ -346,7 +351,6 @@ class AuthManager:
             self.app.logger.error(f"Token decode error: {str(e)}")
             return {}
 
-
     def _create_logout_url(self, post_logout_redirect_uri, id_token=None):
         """Создает URL для выхода из Keycloak"""
         try:
@@ -365,6 +369,9 @@ class AuthManager:
             else:
                 # Если нет id_token, используем client_id
                 logout_url += f'&client_id={self.keycloak.client_id}'
+
+            # Добавляем параметр для полного выхода из всех сессий
+            logout_url += '&logout_hint=global'
 
             return logout_url
         except Exception as e:

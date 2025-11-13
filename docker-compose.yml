@@ -23,7 +23,7 @@ services:
     container_name: app
     environment:
       - DOMAIN=${DOMAIN}
-      - SESSION_TIMEOUT_MINUTES=1
+      - SESSION_TIMEOUT_MINUTES=2
       # Передаем базовые переменные для построения строки подключения
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
