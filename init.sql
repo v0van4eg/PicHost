@@ -1,5 +1,8 @@
 -- init.sql
 
+-- Устанавливаем временную зону для всей базы данных
+ALTER DATABASE pichosting SET timezone TO 'Europe/Moscow';
+
 -- Таблица файлов
 CREATE TABLE IF NOT EXISTS files (
     id SERIAL PRIMARY KEY,
