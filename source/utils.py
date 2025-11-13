@@ -171,6 +171,40 @@ def log_user_logout(user_info):
     )
 
 
+# utils.py (добавьте новую функцию)
+
+def log_auto_logout(user_info, reason='session_timeout'):
+    """
+    Логирует автоматический выход пользователя по таймауту
+
+    :param user_info: dict - Информация о пользователе
+    :param reason: str - Причина автоматического выхода
+    """
+    username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
+
+    # Получаем полное имя пользователя
+    given_name = user_info.get('given_name', '')
+    family_name = user_info.get('family_name', '')
+    full_name = f"{given_name} {family_name}".strip()
+    display_name = full_name if full_name else username
+
+    details = {
+        'ip_address': get_client_info().get('ip_address', 'Unknown'),
+        'reason': reason,
+        'email': user_info.get('email', ''),
+        'given_name': given_name,
+        'family_name': family_name
+    }
+
+    log_user_action(
+        action='auto_logout',
+        resource_type='user',
+        resource_name=display_name,
+        details=details,
+        user=user_info
+    )
+
+
 def log_user_action(action, resource_type=None, resource_name=None, details=None, user=None, request_info=None):
     """
     Записывает действие пользователя в базу данных.

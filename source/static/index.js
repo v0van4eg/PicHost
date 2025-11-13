@@ -126,7 +126,7 @@ function updateStatsDisplay(statsData, error = null) {
     let mountPoint = null;
 
     // Приоритет точек монтирования
-    const mountPriority = ['/mnt/storage', '/app/images', '/images', '/'];
+    const mountPriority = ['/app/images', '/images', '/'];
 
     for (const mp of mountPriority) {
         if (disk_stats && disk_stats[mp]) {
@@ -1040,6 +1040,9 @@ function updateCreateXlsxButtonState() {
 // --- Инициализация после загрузки DOM ---
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM fully loaded and parsed");
+    if (window.is_authenticated) {
+        setupActivityTracking();
+    }
 
     if (!initializeElements()) {
         console.error('Failed to initialize DOM elements. Cannot proceed.');
@@ -1250,3 +1253,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // Добавляем очистку интервала при разгрузке страницы
     window.addEventListener('beforeunload', stopStatsAutoRefresh);
 });
+
+// Функция для обновления активности пользователя
+function updateUserActivity() {
+    // Отправляем запрос для обновления времени активности
+    // Можно использовать lightweight endpoint или просто обращаться к любому API
+    fetch('/api/albums', {
+        method: 'GET',
+        credentials: 'same-origin'
+    }).catch(() => {
+        // Игнорируем ошибки, так как это просто "heartbeat"
+    });
+}
+
+// Обновляем активность при действиях пользователя
+function setupActivityTracking() {
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+
+    events.forEach(event => {
+        document.addEventListener(event, updateUserActivity, { passive: true });
+    });
+
+    // Также обновляем активность периодически (каждые 5 минут)
+    setInterval(updateUserActivity, 5 * 60 * 1000);
+}

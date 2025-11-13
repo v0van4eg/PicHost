@@ -37,12 +37,53 @@
         .login-link:hover {
             background: #2980b9;
         }
+
+        .flash-messages {
+            margin: 15px 0;
+        }
+
+        .flash-message {
+            padding: 10px 15px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .session-expired-message {
+            padding: 10px 15px;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 5px;
+            color: #721c24;
+            margin: 15px 0;
+        }
+
     </style>
 </head>
+<!-- templates/hello.html (обновите body) -->
 <body>
     <div class="hello-container">
         <h1>Добро пожаловать в PicHost!</h1>
         <p>Система хостинга изображений</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for message in messages %}
+                        <div class="flash-message">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% if session.get('session_expired') %}
+            <div class="session-expired-message">
+                <p>🕒 Ваша сессия истекла. Пожалуйста, войдите снова.</p>
+            </div>
+        {% endif %}
+
         <a href="/login" class="login-link">🔐 Войти в систему</a>
     </div>
 </body>

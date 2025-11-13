@@ -8,7 +8,10 @@ import secrets
 import os
 from authlib.integrations.flask_client import OAuth
 from utils import log_user_login, log_user_logout
+import time
+import logging  # Добавьте этот импорт
 
+logger = logging.getLogger(__name__)
 
 class AuthManager:
     def __init__(self, app=None):
@@ -21,6 +24,11 @@ class AuthManager:
         """Инициализация аутентификации с приложением Flask"""
         self.app = app
         self.oauth = OAuth(app)
+
+        # Добавляем middleware для проверки таймаута сессии
+        @app.before_request
+        def check_session_timeout():
+            self._check_session_expiry()
 
         # Получение конфигурации из переменных окружения
         client_id = os.getenv('OAUTH_CLIENT_ID')
@@ -59,6 +67,72 @@ class AuthManager:
         except Exception as e:
             app.logger.error(f"Failed to register OAuth client: {e}")
             raise
+
+    def _check_session_expiry(self):
+        """Проверяет истечение срока действия сессии"""
+        logger.info("Проверка истечения сессии")
+        if 'user' in session:
+            # Помечаем сессию как постоянную и устанавливаем срок действия
+            session.permanent = True
+
+            # Инициализируем last_activity если его нет
+            if 'last_activity' not in session:
+                session['last_activity'] = time.time()
+                return
+
+            # Проверяем, истекла ли сессия
+            last_activity = session['last_activity']
+            logger.info(f"Последняя активность: {last_activity}")
+            timeout_minutes = int(os.environ.get('SESSION_TIMEOUT_MINUTES', 30))
+            timeout_seconds = timeout_minutes * 60
+
+            if time.time() - last_activity > timeout_seconds:
+                # Сессия истекла - выполняем logout
+                self._force_logout()
+                return
+
+            # Обновляем время последней активности
+            session['last_activity'] = time.time()
+
+
+    def _force_logout(self):
+        """Принудительный выход пользователя при истечении сессии"""
+        user_info = session.get('user')
+
+        # Логируем автоматический выход по таймауту
+        if user_info:
+            try:
+                from utils import log_user_action
+                log_user_action(
+                    action='auto_logout',
+                    resource_type='user',
+                    resource_name=user_info.get('name', 'unknown'),
+                    details={
+                        'reason': 'session_timeout',
+                        'ip_address': self._get_client_ip()
+                    },
+                    user=user_info
+                )
+            except Exception as log_error:
+                self.app.logger.error(f"Failed to log auto logout: {log_error}")
+
+        # Очищаем сессию
+        session.clear()
+
+        # Добавляем флаг для отображения сообщения на странице hello
+        session['session_expired'] = True
+
+    def _get_client_ip(self):
+        """Получает IP адрес клиента"""
+        try:
+            from flask import request
+            if request.environ.get('HTTP_X_FORWARDED_FOR'):
+                return request.environ['HTTP_X_FORWARDED_FOR'].split(',')[0]
+            else:
+                return request.environ.get('REMOTE_ADDR', 'Unknown')
+        except:
+            return 'Unknown'
+
 
     def _filter_custom_roles(self, roles):
         """Фильтрует роли, оставляя только кастомные"""
@@ -194,6 +268,7 @@ class AuthManager:
             session['access_token'] = token['access_token']
             session['id_token'] = token.get('id_token')
             session.permanent = True
+            session['last_activity'] = time.time()  # Добавляем время активности
 
             # ЛОГИРОВАНИЕ УСПЕШНОГО ВХОДА
             try:
@@ -207,12 +282,18 @@ class AuthManager:
 
         except Exception as e:
             self.app.logger.error(f"Auth callback error: {str(e)}")
+            # Добавляем отладочную информацию
+            import traceback
+            self.app.logger.error(f"Traceback: {traceback.format_exc()}")
+
             return f'''
             <h1>Ошибка авторизации</h1>
             <p>{str(e)}</p>
+            <p>Подробности смотрите в логах сервера.</p>
             <a href="/">На главную</a> | 
             <a href="/login">Попробовать снова</a>
             ''', 400
+
 
     def _handle_logout(self):
         """Обработка выхода с переходом на /hello"""

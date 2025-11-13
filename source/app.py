@@ -13,7 +13,7 @@ import time
 import tempfile
 import atexit
 from werkzeug.middleware.proxy_fix import ProxyFix
-
+from datetime import timedelta  # Добавьте этот импорт в начало файла
 # Модули приложения
 from utils import cleanup_album_thumbnails, log_user_action
 from sync_manager import SyncManager
@@ -277,7 +277,6 @@ def api_stats():
 
         # Проверяем различные возможные точки монтирования
         mount_points_to_check = [
-            '/mnt/storage',
             '/app/images',  # папка с изображениями в контейнере
             '/images',  # альтернативный путь
             '/'  # корневая файловая система как запасной вариант
@@ -931,9 +930,16 @@ def admin_logs():
                            current_user=get_current_user())  # Передаем пользователя в шаблон
 
 
+@app.route('/api/keepalive', methods=['POST'])
+@login_required
+def api_keepalive():
+    """Эндпоинт для поддержания активности сессии"""
+    # Время активности уже обновляется в before_request
+    return jsonify({'status': 'active'})
+
+
 # Инициализация базы данных при запуске приложения
 init_db()
-
 
 # Функция для закрытия соединений при выходе
 @atexit.register
