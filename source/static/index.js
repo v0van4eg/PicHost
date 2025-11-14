@@ -1,4 +1,17 @@
 // static/index.js
+
+// --- Инициализация глобальных переменных из data-атрибутов ---
+window.currentUser = {
+    isAppAdmin: document.body.getAttribute('data-user-is-app-admin') === 'true',
+    isAppUser: document.body.getAttribute('data-user-is-app-user') === 'true'
+};
+
+window.is_authenticated = document.body.getAttribute('data-user-is-authenticated') === 'true';
+
+console.log('User initialized:', window.currentUser);
+console.log('Authenticated:', window.is_authenticated);
+
+
 // --- Функция форматирования размера файла ---
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';

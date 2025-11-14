@@ -448,8 +448,10 @@
         }
     </style>
 </head>
-<body>
-    <div class="container">
+<body data-user-is-app-admin="{% if is_app_admin() %}true{% else %}false{% endif %}"
+      data-user-is-app-user="{% if is_app_user() %}true{% else %}false{% endif %}"
+      data-user-is-authenticated="{% if current_user.is_authenticated %}true{% else %}false{% endif %}">
+<div class="container">
         <header style="display: flex; justify-content: center; align-items: center; position: relative;">
             <div style="text-align: center;">
                 <h2>📁 PicHost — Хостинг изображений</h2>
@@ -598,12 +600,5 @@
         <div class="loading-details">Распаковываем файлы и создаем превью. Это может занять несколько минут.</div>
     </div>
     <script src="{{ url_for('static', filename='index.js') }}"></script>
-    <script>
-        // Передаем информацию о ролях пользователя в JavaScript
-        window.currentUser = {
-            isAppAdmin: {% if is_app_admin() %}true{% else %}false{% endif %},
-            isAppUser: {% if is_app_user() %}true{% else %}false{% endif %}
-        };
-    </script>
 </body>
 </html>
