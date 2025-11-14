@@ -4,9 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Журнал Действий - Админ-панель</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
+        /* Специфичные стили для logs.html */
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
-        .container { max-width: 1400px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 1400px; margin: auto; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #333; }
         .filters { margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px; }
         .filters label { display: inline-block; margin-right: 10px; }
@@ -33,12 +35,10 @@
     <div class="container">
         <h1>Журнал Действий Пользователей</h1>
         <a href="/admin" style="color: black; text-decoration: underline;">← Назад к админ-панели</a>
-
         <div class="filters">
             <form method="GET">
                 <label for="search_user">Поиск по пользователю:</label>
                 <input type="text" id="search_user" name="search_user" value="{{ search_user or '' }}" placeholder="Имя пользователя...">
-
                 <label for="search_action">Тип действия:</label>
                 <select id="search_action" name="search_action">
                     <option value="">Все действия</option>
@@ -46,18 +46,14 @@
                         <option value="{{ action }}" {% if search_action == action %}selected{% endif %}>{{ action }}</option>
                     {% endfor %}
                 </select>
-
                 <label for="date_from">Дата от:</label>
                 <input type="date" id="date_from" name="date_from" value="{{ date_from or '' }}">
-
                 <label for="date_to">Дата до:</label>
                 <input type="date" id="date_to" name="date_to" value="{{ date_to or '' }}">
-
                 <button type="submit">Применить фильтры</button>
                 <a href="{{ url_for('admin_logs') }}" style="margin-left: 10px; color: #6c757d;">Сбросить</a>
             </form>
         </div>
-
         <table class="log-table">
             <thead>
                 <tr>
@@ -121,21 +117,17 @@
                 {% endfor %}
             </tbody>
         </table>
-
-        <!-- Пагинация -->
         {% if total_count > per_page %}
         <div class="pagination">
             {% for p in range(1, (total_count // per_page) + 2) %}
                 {% if p == page %}
                     <a href="#" class="active">{{ p }}</a>
                 {% else %}
-                    <!-- Сохраняем параметры фильтрации при переходе по страницам -->
                     <a href="{{ url_for('admin_logs', page=p, search_user=search_user, search_action=search_action, date_from=date_from, date_to=date_to) }}">{{ p }}</a>
                 {% endif %}
             {% endfor %}
         </div>
         {% endif %}
-
         <div style="margin-top: 20px; color: #6c757d; font-size: 0.9em;">
             Всего записей: {{ total_count }}
         </div>

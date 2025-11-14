@@ -5,103 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PicHost — Хостинг изображений</title>
-    <!-- Подключение favicon -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        /* --- CSS с добавленными стилями для селекторов --- */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        html, body {
-            height: 100%;
-            background: #e9ecef;
-            color: #333;
-            padding: 10px;
-            overflow: hidden;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            margin-top: 0px;
-            flex-shrink: 0;
-            position: relative;
-        }
-        .header-left {
-            text-align: left;
-        }
-        .header-right {
-            text-align: right;
-        }
-        h1 {
-            font-size: 2.2rem;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-        .subtitle {
-            color: #6c757d;
-            font-size: 1.0rem;
-        }
-        .user-info {
-            color: #495057;
-            font-size: 0.75rem;
-        }
-        .user-info a {
-            color: #3498db;
-            text-decoration: none;
-            margin-left: 6px;
-            font-size: 0.75rem;
-        }
-        .user-info a:hover {
-            text-decoration: underline;
-        }
-        .columns {
-            display: flex;
-            gap: 24px;
-            flex: 1;
-            overflow: hidden;
-        }
-        .column-left {
-            flex: 0 0 25%;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-        }
-        .column-right {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-        }
-        .card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            overflow: hidden;
-        }
-        #manageCard {
-            background: #f8f9fa;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            overflow: hidden;
-        }
+        /* --- CSS, специфичные для index.html --- */
+        /* (Остальные стили перенесены в static/styles.css) */
         .upload-area {
             border: 2px dashed #adb5bd;
             border-radius: 10px;
@@ -123,23 +31,6 @@
         .file-input {
             display: none;
         }
-        .btn {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .btn:hover {
-            background: #2980b9;
-        }
         .btnmanage {
             background: #3498db;
             color: white;
@@ -158,102 +49,15 @@
         .btnmanage:hover {
             background: #2980b9;
         }
-        .btn:disabled {
-            background: #adb5bd;
-            cursor: not-allowed;
-        }
-        .btn-success {
-            background: #2ecc71;
-        }
-        .btn-success:hover {
-            background: #27ae60;
-        }
-        .btn-copy {
-            background: #95a5a6;
-            padding: 6px 12px;
-            font-size: 0.9rem;
-        }
-        .btn-copy:hover {
-            background: #7f8c8d;
-        }
-        .btn-copy.copied {
-            background: #2ecc71;
-        }
-        .links-section h2 {
-            margin-bottom: 16px;
-            color: #2c3e50;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        .link-list {
-            list-style: none;
-            padding-right: 8px;
-            flex: 1;
-            overflow-y: auto;
+        #manageCard {
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 24px;
             display: flex;
             flex-direction: column;
-        }
-        .link-item {
-            padding: 16px 0;
-            border-bottom: 1px solid #dee2e6;
-            flex-shrink: 0;
-        }
-        .link-item:last-child {
-            border-bottom: none;
-        }
-        .article-header {
-            background-color: #5c5c;
-            padding: 10px 15px;
-            margin: 10px 0 5px 0;
-            font-weight: bold;
-            color: #ffffff;
-            border-left: 4px solid #3498db;
-            border-radius: 4px;
-            flex-shrink: 0;
-        }
-        .link-preview {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
-        }
-        .link-preview img {
-            width: 60px;
-            height: 60px;
-            object-fit: cover;
-            border-radius: 6px;
-            border: 1px solid #ced4da;
-        }
-        .link-url {
             flex: 1;
-        }
-        .link-url-input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 0.9rem;
-            background: #f8f9fa;
-        }
-        .file-info {
-            font-size: 0.8rem;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-        .copy-btn {
-            white-space: nowrap;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 40px 0;
-            color: #6c757d;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
+            overflow: hidden;
         }
         /* Стили для прогресс-бара */
         #progressContainer {
@@ -276,385 +80,28 @@
             font-size: 0.8rem;
             font-weight: bold;
         }
-        /* Новые стили для селекторов */
-        .selector-group {
-            margin-bottom: 20px;
-        }
-        .selector-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #495057;
-        }
-        .selector {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ced4da;
-            border-radius: 6px;
-            font-size: 1rem;
-            background: white;
-            cursor: pointer;
-        }
-        .selector:disabled {
-            background: #e9ecef;
-            cursor: not-allowed;
-            color: #6c757d;
-        }
         .manage-card-content {
             flex: 1;
             display: flex;
             flex-direction: column;
         }
-
         /* Стили для кнопки создания XLSX */
         #createXlsxBtn {
             width: 100%;
             margin-top: 10px;
             background: #2ecc71; /* Зелёный цвет */
         }
-
         #createXlsxBtn:hover {
             background: #27ae60; /* Темно-зелёный при наведении */
         }
-
         #createXlsxBtn:disabled {
             background: #adb5bd; /* Серый цвет при неактивности */
             cursor: not-allowed;
         }
-
-        @media (max-width: 900px) {
-            .columns {
-                flex-direction: column;
-            }
-            .column-left,
-            .column-right {
-                flex: 1;
-            }
-            .link-preview {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .link-preview img {
-                align-self: center;
-            }
-            header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
-            }
-            .header-right {
-                align-self: flex-end;
-            }
-        }
-
-        /* Стили для модального окна предпросмотра */
-        .preview-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 10000;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            max-width: 90vw;
-            max-height: 90vh;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .modal-close {
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 2rem;
-            color: #666;
-            cursor: pointer;
-            z-index: 10001;
-        }
-
-        .modal-close:hover {
-            color: #333;
-        }
-
-        .modal-image {
-            max-width: 100%;
-            max-height: 70vh;
-            object-fit: contain;
-            border-radius: 8px 8px 0 0;
-        }
-
-        .modal-info {
-            padding: 20px;
-            border-top: 1px solid #dee2e6;
-        }
-
-        .modal-filename {
-            font-weight: 600;
-            margin-bottom: 15px;
-            word-break: break-all;
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn-copy-full, .btn-view-original {
-            flex: 1;
-            min-width: 120px;
-            text-align: center;
-            text-decoration: none;
-        }
-
-        /* Улучшаем стили для ленивой загрузки */
-        .lazy-image {
-            transition: opacity 0.3s ease;
-        }
-
-        .lazy-image:not([src]) {
-            opacity: 0.5;
-        }
-
-        .lazy-image.loaded {
-            opacity: 1;
-        }
-
-        /* НОВЫЕ СТИЛИ ДЛЯ МОДАЛЬНОГО ОКНА XLSX */
-        .xlsx-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-            z-index: 10000;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .xlsx-modal-content {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            width: 100%;
-            max-width: 480px;
-            position: relative;
-            overflow: hidden;
-            animation: slideUp 0.3s ease;
-        }
-
-        .xlsx-modal-header {
-            background: linear-gradient(135deg, #3498db, #2980b9);
-            color: white;
-            padding: 24px;
-            text-align: center;
-        }
-
-        .xlsx-modal-header h3 {
-            font-size: 1.4rem;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        .xlsx-modal-body {
-            padding: 32px;
-        }
-
-        .xlsx-modal-footer {
-            padding: 20px 32px 32px;
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-            border-top: 1px solid #e9ecef;
-        }
-
-        .form-group {
-            margin-bottom: 24px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #2c3e50;
-            font-size: 0.95rem;
-        }
-
-        .form-select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 1rem;
-            background: white;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .form-select:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-        }
-
-        .form-select:hover {
-            border-color: #ced4da;
-        }
-
-        .btn-primary {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-weight: 500;
-        }
-
-        .btn-primary:hover {
-            background: #2980b9;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-weight: 500;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-            transform: translateY(-1px);
-        }
-
-        .close-btn {
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            color: white;
-            font-size: 1.2rem;
-        }
-
-        .close-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: rotate(90deg);
-        }
-
-        /* Анимации */
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Адаптивность для модального окна */
-        @media (max-width: 600px) {
-            .xlsx-modal-content {
-                max-width: 95vw;
-                margin: 20px;
-            }
-
-            .xlsx-modal-body {
-                padding: 24px;
-            }
-
-            .xlsx-modal-footer {
-                padding: 16px 24px 24px;
-                flex-direction: column;
-            }
-
-            .btn-primary, .btn-secondary {
-                width: 100%;
-            }
-        }
-
-        /* Стили для кнопок удаления */
-        .delete-buttons-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            min-height: 44px;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
-            transform: translateY(-1px);
-        }
-
-        .btn-danger:disabled {
-            background: #adb5bd;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* Скрываем кнопки по умолчанию */
-        #deleteAlbumBtn,
-        #deleteArticleBtn {
-            display: none;
-        }
-
+        /* Стили для селекторов (уже в styles.css) */
+        /* .selector-group, .selector-label, .selector - перенесены */
+        /* Стили для кнопок удаления (уже в styles.css) */
+        /* .btn-danger - перенесён */
         /* Стили для счетчиков файлов в селекторах */
         .selector option::after {
             content: attr(data-count);
@@ -662,14 +109,13 @@
             color: #6c757d;
             font-size: 0.9em;
         }
-
         .album-count {
             color: #6c757d;
             font-size: 0.9em;
             margin-left: 5px;
         }
 
-        /* Стили для анимации ожидания (без затемнения фона) */
+        /* Стили для оверлея загрузки */
         .loading-overlay {
             display: none;
             position: fixed;
@@ -688,7 +134,6 @@
             max-width: 350px;
             border: 1px solid #e1e5e9;
         }
-
         .loading-spinner {
             width: 45px;
             height: 45px;
@@ -698,7 +143,6 @@
             animation: spin 1s linear infinite;
             margin-bottom: 18px;
         }
-
         .loading-text {
             font-size: 1rem;
             color: #333;
@@ -706,19 +150,16 @@
             font-weight: 500;
             margin-bottom: 6px;
         }
-
         .loading-details {
             font-size: 0.8rem;
             color: #666;
             text-align: center;
             line-height: 1.4;
         }
-
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
         /* Анимация появления */
         @keyframes fadeInScale {
             from {
@@ -730,132 +171,272 @@
                 transform: translate(-50%, -50%) scale(1);
             }
         }
-
         .loading-overlay.show {
             display: flex;
             animation: fadeInScale 0.3s ease;
         }
+        /* Улучшенные стили для статистики */
+        .stats-card {
+            background: #ffffff;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .stats-card h3 {
+            margin: 0 0 12px 0;
+            font-size: 1rem;
+            color: #2c3e50;
+            text-align: center;
+        }
+        .stats-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            font-weight: 500;
+        }
+        .stat-value {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #2c3e50;
+            text-align: left;
+        }
+        .disk-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            margin: 2px 0;
+            overflow: hidden;
+            position: relative;
+        }
+        .disk-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2ecc71, #f39c12, #e74c3c);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            width: 0%;
+            position: relative;
+        }
+        /* Индикатор процентов на баре */
+        .disk-bar-fill::after {
+            content: attr(data-percent);
+            position: absolute;
+            right: 5px;
+            top: -20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .disk-bar:hover .disk-bar-fill::after {
+            opacity: 1;
+        }
+        .disk-usage-text {
+            width: 100%;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #495057;
+            margin-top: 4px;
+        }
+        .btn-refresh {
+            background: #6c757d;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-refresh:hover {
+            background: #5a6268;
+        }
+        .btn-refresh:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+        }
+        /* Адаптивность для статистики (уже в styles.css) */
+        /* @media (max-width: 900px) - перенесён */
 
-/* Улучшенные стили для статистики */
-.stats-card {
-    background: #ffffff;
-    border: 1px solid #e1e5e9;
-    border-radius: 8px;
-    padding: 16px;
-    margin-top: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
 
-.stats-card h3 {
-    margin: 0 0 12px 0;
-    font-size: 1rem;
-    color: #2c3e50;
-    text-align: center;
-}
-
-.stats-content {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.stat-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.stat-label {
-    font-size: 0.85rem;
-    color: #6c757d;
-    font-weight: 500;
-}
-
-.stat-value {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #2c3e50;
-    text-align: left;
-}
-
-.disk-bar {
-    width: 100%;
-    height: 8px;
-    background: #e9ecef;
-    border-radius: 4px;
-    margin: 2px 0;
-    overflow: hidden;
-    position: relative;
-}
-
-.disk-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #2ecc71, #f39c12, #e74c3c);
-    border-radius: 4px;
-    transition: width 0.5s ease;
-    width: 0%;
-    position: relative;
-}
-
-/* Индикатор процентов на баре */
-.disk-bar-fill::after {
-    content: attr(data-percent);
-    position: absolute;
-    right: 5px;
-    top: -20px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.disk-bar:hover .disk-bar-fill::after {
-    opacity: 1;
-}
-
-.disk-usage-text {
-    width: 100%;
-    text-align: center;
-    font-size: 0.8rem;
-    color: #495057;
-    margin-top: 4px;
-}
-
-.btn-refresh {
-    background: #6c757d;
-    padding: 8px 12px;
-    font-size: 0.9rem;
-    border: none;
-    border-radius: 4px;
-    color: white;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.btn-refresh:hover {
-    background: #5a6268;
-}
-
-.btn-refresh:disabled {
-    background: #adb5bd;
-    cursor: not-allowed;
-}
-
-/* Адаптивность для статистики */
-@media (max-width: 900px) {
-    .stats-card {
-        margin-top: 15px;
-        padding: 12px;
-    }
-
-    .stat-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-}
+        /* НОВЫЕ СТИЛИ ДЛЯ МОДАЛЬНОГО ОКНА XLSX */
+        .xlsx-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+        .xlsx-modal-content {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 480px;
+            position: relative;
+            overflow: hidden;
+            animation: slideUp 0.3s ease;
+        }
+        .xlsx-modal-header {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        .xlsx-modal-header h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .xlsx-modal-body {
+            padding: 32px;
+        }
+        .xlsx-modal-footer {
+            padding: 20px 32px 32px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            border-top: 1px solid #e9ecef;
+        }
+        .form-group {
+            margin-bottom: 24px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.95rem;
+        }
+        .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .form-select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+        .form-select:hover {
+            border-color: #ced4da;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .btn-primary:hover {
+            background: #2980b9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
+        .close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: white;
+            font-size: 1.2rem;
+        }
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+        /* Анимации */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* Адаптивность для модального окна */
+        @media (max-width: 600px) {
+            .xlsx-modal-content {
+                max-width: 95vw;
+                margin: 20px;
+            }
+            .xlsx-modal-body {
+                padding: 24px;
+            }
+            .xlsx-modal-footer {
+                padding: 16px 24px 24px;
+                flex-direction: column;
+            }
+            .btn-primary, .btn-secondary {
+                width: 100%;
+            }
+        }
+        /* Скрываем кнопки по умолчанию */
+        #deleteAlbumBtn,
+        #deleteArticleBtn {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -864,15 +445,13 @@
             <div style="text-align: center;">
                 <h2>📁 PicHost — Хостинг изображений</h2>
             </div>
-            <div style="position: absolute; right: 20px; background: #f8f9fa; padding: 6px 12px; border-radius: 6px; border: 1px solid #dee2e6; font-size: 0.85rem;">
+            <div style="position: absolute; right: 0px; padding: 0px 0px; font-size: 0.85rem;">
                 <div class="user-info">
-                    {% if current_user %}
-                        <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }} | </span>
-                        <a href="/profile">Профиль</a>
+                        <a href="/profile" class="profile-link">
+                            👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }}
+                        </a>
+                        |
                         <a href="/logout">Выйти</a>
-                    {% else %}
-                        <a href="/login">🔐 Войти</a>
-                    {% endif %}
                 </div>
             </div>
         </header>
@@ -896,7 +475,6 @@
                             </div>
                         </div>
                     </form>
-                    <!-- Вставить в column-left, после uploadForm и перед manageBtn -->
                     <div class="stats-card" id="statsCard" style="display: none;">
                         <h3>📊 Статистика системы</h3>
                         <div class="stats-content">
@@ -926,7 +504,7 @@
                         <span>Управление ссылками</span>
                     </button>
                 </div>
-                <!-- Карточка управления ссылками -->
+
                 <div id="manageCard" style="display: none;">
                     <h2>Управление ссылками</h2>
                     <div class="manage-card-content">
@@ -942,12 +520,8 @@
                                 <option value="">-- Сначала выберите альбом --</option>
                             </select>
                         </div>
-
-                        <!-- Контейнер для кнопок удаления -->
                         <div id="deleteButtonsContainer" class="delete-buttons-container">
-                            <!-- Кнопки будут созданы динамически -->
                         </div>
-
                         <div class="selector-group">
                             <button class="btn" id="createXlsxBtn" disabled>
                                 <span>📊 Создать документ XLSX</span>
@@ -972,7 +546,6 @@
         </div>
     </div>
 
-    <!-- Обновленное модальное окно создания XLSX -->
     <div id="xlsxModal" class="xlsx-modal">
         <div class="xlsx-modal-content">
             <div class="xlsx-modal-header">
@@ -987,7 +560,6 @@
                         <option value="in_cell">В ячейку (все ссылки в одной ячейке)</option>
                     </select>
                 </div>
-
                 <div class="form-group" id="separatorGroup" style="display: none;">
                     <label class="form-label" for="separatorSelect">Разделитель ссылок:</label>
                     <select id="separatorSelect" class="form-select">
@@ -1003,14 +575,13 @@
         </div>
     </div>
 
-        <!-- Оверлей загрузки -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
         <div class="loading-text">Обработка архива...</div>
         <div class="loading-details">Распаковываем файлы и создаем превью. Это может занять несколько минут.</div>
     </div>
-
-    <script src="{{ url_for('static', filename='index.js') }}"></script>    <script>
+    <script src="{{ url_for('static', filename='index.js') }}"></script>
+    <script>
         // Передаем информацию о ролях пользователя в JavaScript
         window.currentUser = {
             isAppAdmin: {% if is_app_admin() %}true{% else %}false{% endif %},

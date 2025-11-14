@@ -5,96 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Профиль пользователя</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        {% raw %}
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        html, body {
-            height: 100%;
-            background: #e9ecef;
-            color: #333;
-            padding: 10px;
-            overflow: hidden; /* Скрыли прокрутку body */
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 20px); /* Занимает всю высоту окна минус отступы */
-            overflow: hidden; /* Предотвращает прокрутку контейнера */
-        }
-        header {
-            text-align: center;
-            margin-bottom: 10px;
-            flex-shrink: 0; /* Не сжимается */
-        }
-        h1 {
-            font-size: 2.2rem;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-        .subtitle {
-            color: #6c757d;
-            font-size: 1.0rem;
-        }
-        .columns {
-            display: flex;
-            gap: 24px;
-            flex: 1; /* Занимает оставшееся место */
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонок */
-        }
-        .column-left {
-            flex: 0 0 25%; /* Ширина 25% */
-            min-width: 0; /* Позволяет колонке сжиматься */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
-        }
-        .column-right {
-            flex: 1; /* Оставшаяся ширина */
-            min-width: 0; /* Позволяет колонке сжиматься */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
-        }
-        .card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            flex: 1; /* Растягивается на доступное пространство */
-            overflow: hidden; /* Предотвращает прокрутку внутри карточки */
-        }
-        .card-content {
-            overflow-y: auto; /* Добавляет прокрутку к содержимому карточки, если оно не помещается */
-            flex: 1; /* Позволяет содержимому заполнять доступное пространство */
-            padding: 10px; /* Добавим внутренний отступ для удобства */
-        }
-        .user-info {
-            background: #e2e8f0; /* Светло-серый фон */
-            padding: 20px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        .roles-section {
-            background: #e2e8f0; /* Светло-серый фон */
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        .role-item {
-            padding: 5px 10px;
-            margin: 2px;
-            background: #cbd5e0; /* Более темный серый для бейджа роли */
-            border-radius: 4px;
-            display: inline-block;
-            font-size: 0.9em;
-        }
+        /* Специфичные стили для profile.html, если необходимо */
+        /* В данном случае, основные стили перенесены в styles.css */
         .profile-actions {
             margin-top: 20px;
             display: flex;
@@ -108,7 +22,6 @@
         .profile-actions a:hover {
             text-decoration: none;
         }
-        {% endraw %}
     </style>
 </head>
 <body>
@@ -117,7 +30,6 @@
             <h1>👤 Профиль пользователя</h1>
         </header>
         <div class="columns">
-            <!-- Скрыли левую колонку -->
             <div class="column-right">
                 <div class="card">
                     <div class="card-content">
@@ -129,7 +41,6 @@
                             <p><strong>Email:</strong> {{ user_info.email or 'Не указан' }}</p>
                             <p><strong>ID:</strong> {{ user_info.sub or 'Не указан' }}</p>
                         </div>
-
                         <div class="roles-section">
                             <h3>📋 Доступные роли ({{ display_roles|length }})</h3>
                             <div>
