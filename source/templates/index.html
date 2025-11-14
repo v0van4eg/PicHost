@@ -437,6 +437,15 @@
         #deleteArticleBtn {
             display: none;
         }
+
+        /* Стили для кнопок удаления */
+        .delete-buttons-container {
+            display: flex;
+            flex-direction: column; /* Кнопки в столбик */
+            gap: 10px; /* Равномерный отступ между кнопками */
+            margin: 20px 0; /* Отступы сверху и снизу контейнера */
+            padding: 0 10px; /* Небольшой отступ от краев карточки */
+        }
     </style>
 </head>
 <body>
@@ -475,31 +484,7 @@
                             </div>
                         </div>
                     </form>
-                    <div class="stats-card" id="statsCard" style="display: none;">
-                        <h3>📊 Статистика системы</h3>
-                        <div class="stats-content">
-                            <div class="stat-item">
-                                <span class="stat-label">Хранилище:</span>
-                                <div class="disk-bar">
-                                    <div class="disk-bar-fill" id="diskBarFill"></div>
-                                </div>
-                                <div class="stat-value" id="diskUsage" style="width: 100%; text-align: center; margin-top: 5px; font-size: 0.8rem;">
-                                    Загрузка...
-                                </div>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Всего файлов:</span>
-                                <span class="stat-value" id="totalFiles">0</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Всего альбомов:</span>
-                                <span class="stat-value" id="totalAlbums">0</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-refresh" id="refreshStatsBtn" style="margin-top: 10px; width: 100%;">
-                            🔄 Обновить
-                        </button>
-                    </div>
+                    <!-- КНОПКА УПРАВЛЕНИЯ ССЫЛКАМИ ОСТАЕТСЯ ТУТ -->
                     <button class="btnmanage" id="manageBtn">
                         <span>Управление ссылками</span>
                     </button>
@@ -520,13 +505,45 @@
                                 <option value="">-- Сначала выберите альбом --</option>
                             </select>
                         </div>
-                        <div id="deleteButtonsContainer" class="delete-buttons-container">
-                        </div>
+                        <!-- Кнопка XLSX теперь здесь, сразу после селекторов -->
                         <div class="selector-group">
                             <button class="btn" id="createXlsxBtn" disabled>
                                 <span>📊 Создать документ XLSX</span>
                             </button>
                         </div>
+                        <!-- Контейнер для кнопок удаления теперь здесь -->
+                        <div id="deleteButtonsContainer" class="delete-buttons-container">
+                        </div>
+
+                        <!-- КАРТОЧКА СТАТИСТИКИ ХРАНИЛИЩА ПЕРЕМЕЩЕНА СЮДА -->
+                        {% if is_app_admin() %}
+                        <div class="stats-card" id="statsCard" style="display: none;">
+                            <h3>📊 Статистика системы</h3>
+                            <div class="stats-content">
+                                <div class="stat-item">
+                                    <span class="stat-label">Хранилище:</span>
+                                    <div class="disk-bar">
+                                        <div class="disk-bar-fill" id="diskBarFill"></div>
+                                    </div>
+                                    <div class="stat-value" id="diskUsage" style="width: 100%; text-align: center; margin-top: 5px; font-size: 0.8rem;">
+                                        Загрузка...
+                                    </div>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Всего файлов:</span>
+                                    <span class="stat-value" id="totalFiles">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Всего альбомов:</span>
+                                    <span class="stat-value" id="totalAlbums">0</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-refresh" id="refreshStatsBtn" style="margin-top: 10px; width: 100%;">
+                                🔄 Обновить
+                            </button>
+                        </div>
+                        {% endif %}
+                        <!-- /КАРТОЧКА СТАТИСТИКИ ХРАНИЛИЩА -->
                     </div>
                     <button class="btnmanage" id="backToUploadBtn">
                         <span>Назад к загрузке</span>

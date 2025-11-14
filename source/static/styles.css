@@ -283,6 +283,15 @@ h1 {
     transform: none;
 }
 
+/* Стили для кнопок удаления */
+.delete-buttons-container {
+    display: flex;
+    flex-direction: column; /* Кнопки в столбик */
+    gap: 10px; /* Равномерный отступ между кнопками */
+    margin: 20px 0; /* Отступы сверху и снизу контейнера */
+    padding: 0 10px; /* Небольшой отступ от краев карточки */
+}
+
 /* --- Стили для селекторов --- */
 .selector-group {
     margin-bottom: 20px;
