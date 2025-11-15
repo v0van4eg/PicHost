@@ -29,6 +29,16 @@ let loadingOverlay;
 // Глобальные переменные для статистики
 let statsInterval = null;
 
+// Переменная для хранения информации о правах пользователя
+let userPermissions = {
+    canUpload: false,
+    canManageAlbums: false,
+    canManageArticles: false,
+    canExport: false,
+    canViewFiles: false,
+    canViewStats: false
+};
+
 // Конфигурация превью
 const PREVIEW_CONFIG = {
     thumbnail: {
@@ -83,6 +93,11 @@ function updateDiskBar(percentUsed) {
 
 // Функция загрузки статистики
 async function loadStats() {
+    // Если пользователь не имеет прав на просмотр статистики, не загружаем
+    if (!userPermissions.canViewStats) {
+        return null;
+    }
+
     try {
         const response = await fetch('/api/stats');
         if (!response.ok) {
@@ -189,27 +204,31 @@ function initStats() {
         return;
     }
 
-    // Показываем карточку статистики
-    statsCard.style.display = 'block';
+    // Показываем карточку статистики только если есть права
+    if (userPermissions.canViewStats) {
+        statsCard.style.display = 'block';
 
-    // Загружаем статистику при инициализации
-    loadStats();
+        // Загружаем статистику при инициализации
+        loadStats();
 
-    // Обработчик для кнопки обновления
-    refreshStatsBtn.addEventListener('click', () => {
-        refreshStatsBtn.disabled = true;
-        refreshStatsBtn.innerHTML = '<span>Загрузка...</span>';
+        // Обработчик для кнопки обновления
+        refreshStatsBtn.addEventListener('click', () => {
+            refreshStatsBtn.disabled = true;
+            refreshStatsBtn.innerHTML = '<span>Загрузка...</span>';
 
-        loadStats().finally(() => {
-            setTimeout(() => {
-                refreshStatsBtn.disabled = false;
-                refreshStatsBtn.innerHTML = '<span>🔄 Обновить</span>';
-            }, 1000);
+            loadStats().finally(() => {
+                setTimeout(() => {
+                    refreshStatsBtn.disabled = false;
+                    refreshStatsBtn.innerHTML = '<span>🔄 Обновить</span>';
+                }, 1000);
+            });
         });
-    });
 
-    // Автоматическое обновление статистики каждые 5 минут
-    statsInterval = setInterval(loadStats, 5 * 60 * 1000);
+        // Автоматическое обновление статистики каждые 5 минут
+        statsInterval = setInterval(loadStats, 5 * 60 * 1000);
+    } else {
+        statsCard.style.display = 'none';
+    }
 }
 
 // Функция для остановки автоматического обновления
@@ -218,6 +237,22 @@ function stopStatsAutoRefresh() {
         clearInterval(statsInterval);
         statsInterval = null;
     }
+}
+
+// --- Инициализация прав пользователя ---
+function initUserPermissions() {
+    // Получаем информацию о правах из data-атрибутов или других источников
+    userPermissions = {
+        canUpload: document.getElementById('uploadBtn') !== null && !document.getElementById('uploadBtn').disabled,
+        canManageAlbums: document.getElementById('deleteButtonsContainer') !== null,
+        canManageArticles: document.getElementById('deleteButtonsContainer') !== null,
+        canExport: document.getElementById('createXlsxBtn') !== null,
+        canViewFiles: document.querySelector('.links-section .empty-state') !== null,
+        canViewStats: document.getElementById('statsCard') !== null &&
+                     document.getElementById('statsCard').style.display !== 'none'
+    };
+
+    console.log('👤 User permissions:', userPermissions);
 }
 
 // --- Система ленивой загрузки изображений ---
@@ -301,10 +336,13 @@ function initializeElements() {
     deleteArticleBtn = document.getElementById('deleteArticleBtn');
 
     // Проверяем только основные элементы
-    if (!dropArea || !zipFileInput || !browseBtn || !uploadBtn || !uploadForm || !linkList || !currentAlbumTitle || !progressContainer || !progressBar || !progressText || !loadingOverlay) {
+    if (!dropArea || !zipFileInput || !browseBtn || !uploadForm || !linkList || !currentAlbumTitle || !progressContainer || !progressBar || !progressText || !loadingOverlay) {
         console.error('One or more required DOM elements not found!');
         return false;
     }
+
+    // Инициализируем права пользователя
+    initUserPermissions();
 
     // Инициализация статистики
     initStats();
@@ -341,7 +379,9 @@ function updateUI() {
     if (file) {
         const fileSize = formatFileSize(file.size);
         dropArea.innerHTML = `<p>Выбран файл: <strong>${file.name}</strong></p><p>Размер: ${fileSize}</p><p>Готов к загрузке</p>`;
-        uploadBtn.disabled = false;
+        if (userPermissions.canUpload) {
+            uploadBtn.disabled = false;
+        }
     } else {
         dropArea.innerHTML = `<p>Перетащите ZIP-архив сюда</p><p>или</p><button type="button" class="btn" id="browseBtn">Выбрать файл</button>`;
         uploadBtn.disabled = true;
@@ -645,6 +685,13 @@ async function showFilesForAlbum(albumName, articleName = '') {
         return;
     }
 
+    if (!userPermissions.canViewFiles) {
+        if (linkList) {
+            linkList.innerHTML = '<div class="empty-state" style="color: #e74c3c;">❌ У вас нет прав для просмотра файлов</div>';
+        }
+        return;
+    }
+
     await updateTitleWithCount(albumName, articleName);
 
     try {
@@ -737,6 +784,11 @@ async function showFilesForAlbum(albumName, articleName = '') {
 
 // --- Функции для удаления ---
 async function deleteAlbum(albumName) {
+    if (!userPermissions.canManageAlbums) {
+        alert('❌ У вас нет прав для удаления альбомов');
+        return;
+    }
+
     if (!albumName || !confirm(`Вы уверены, что хотите удалить альбом "${albumName}"? Это действие нельзя отменить.`)) {
         return;
     }
@@ -764,6 +816,11 @@ async function deleteAlbum(albumName) {
 }
 
 async function deleteArticle(albumName, articleName) {
+    if (!userPermissions.canManageArticles) {
+        alert('❌ У вас нет прав для удаления артикулов');
+        return;
+    }
+
     if (!albumName || !articleName || !confirm(`Вы уверены, что хотите удалить артикул "${articleName}" из альбома "${albumName}"? Это действие нельзя отменить.`)) {
         return;
     }
@@ -813,8 +870,9 @@ function updateDeleteButtonsState() {
 
 // --- Инициализация кнопок удаления ---
 function initDeleteButtons() {
-    // Просто создаем кнопки для всех авторизованных пользователей
-    // Сервер сам проверит права и вернет 403 если нет доступа
+    if (!userPermissions.canManageAlbums && !userPermissions.canManageArticles) {
+        return; // Не создаем кнопки если нет прав
+    }
 
     let deleteButtonsContainer = document.getElementById('deleteButtonsContainer');
     if (!deleteButtonsContainer) {
@@ -833,7 +891,7 @@ function initDeleteButtons() {
         }
     }
 
-    if (!deleteAlbumBtn) {
+    if (!deleteAlbumBtn && userPermissions.canManageAlbums) {
         deleteAlbumBtn = document.createElement('button');
         deleteAlbumBtn.id = 'deleteAlbumBtn';
         deleteAlbumBtn.className = 'btn btn-danger';
@@ -845,7 +903,7 @@ function initDeleteButtons() {
         deleteButtonsContainer.appendChild(deleteAlbumBtn);
     }
 
-    if (!deleteArticleBtn) {
+    if (!deleteArticleBtn && userPermissions.canManageArticles) {
         deleteArticleBtn = document.createElement('button');
         deleteArticleBtn.id = 'deleteArticleBtn';
         deleteArticleBtn.className = 'btn btn-danger';
@@ -892,6 +950,11 @@ function initXlsxModal() {
 }
 
 function showXlsxModal() {
+    if (!userPermissions.canExport) {
+        alert('❌ У вас нет прав для экспорта данных');
+        return;
+    }
+
     const selectedAlbum = albumSelector.value;
     if (!selectedAlbum) {
         alert('Сначала выберите альбом');
@@ -909,6 +972,11 @@ function hideXlsxModal() {
 }
 
 async function generateXlsxFile() {
+    if (!userPermissions.canExport) {
+        alert('❌ У вас нет прав для экспорта данных');
+        return;
+    }
+
     const selectedAlbum = albumSelector.value;
     const selectedArticle = articleSelector.value || null;
     const exportType = xlsxTemplateSelect.value;
@@ -1064,6 +1132,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Обработчик отправки формы ---
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        if (!userPermissions.canUpload) {
+            alert('❌ У вас нет прав для загрузки файлов');
+            return;
+        }
+
         if (!zipFileInput || !uploadBtn) {
              console.error('DOM elements for upload not initialized');
              return;
