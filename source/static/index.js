@@ -130,7 +130,7 @@ function updateStatsDisplay(statsData, error = null) {
     let mountPoint = null;
 
     // Приоритет точек монтирования
-    const mountPriority = ['/mnt/storage', '/app/images', '/images', '/'];
+    const mountPriority = ['/app/images', '/images', '/'];
 
     for (const mp of mountPriority) {
         if (disk_stats && disk_stats[mp]) {
