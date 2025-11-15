@@ -1,4 +1,9 @@
 // static/index.js
+
+// --- Инициализация глобальных переменных ---
+console.log('User initialized:', window.currentUser);
+console.log('Authenticated:', window.is_authenticated);
+
 // --- Функция форматирования размера файла ---
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -296,10 +301,8 @@ function initializeElements() {
     deleteAlbumBtn = document.getElementById('deleteAlbumBtn');
     deleteArticleBtn = document.getElementById('deleteArticleBtn');
 
-    if (!dropArea || !zipFileInput || !browseBtn || !uploadBtn || !uploadForm || !linkList || !currentAlbumTitle ||
-        !manageBtn || !backToUploadBtn || !uploadCard || !manageCard || !progressContainer || !progressBar || !progressText ||
-        !albumSelector || !articleSelector || !createXlsxBtn || !xlsxModal || !xlsxTemplateSelect || !separatorSelect ||
-        !generateXlsxBtn || !cancelXlsxBtn || !loadingOverlay) {
+    // Проверяем только основные элементы
+    if (!dropArea || !zipFileInput || !browseBtn || !uploadBtn || !uploadForm || !linkList || !currentAlbumTitle || !progressContainer || !progressBar || !progressText || !loadingOverlay) {
         console.error('One or more required DOM elements not found!');
         return false;
     }
@@ -329,61 +332,9 @@ function hideLoadingOverlay() {
     }
 }
 
-function updateLoadingProgress(stage, current, total) {
-    if (loadingOverlay) {
-        const detailsElement = loadingOverlay.querySelector('.loading-details');
-        if (detailsElement) {
-            let message = '';
-            switch(stage) {
-                case 'extracting':
-                    message = `Распаковка файлов: ${current}/${total}`;
-                    break;
-                case 'processing':
-                    message = `Обработка изображений: ${current}/${total}`;
-                    break;
-                case 'thumbnails':
-                    message = `Создание превью: ${current}/${total}`;
-                    break;
-                case 'database':
-                    message = `Сохранение в базу данных...`;
-                    break;
-                default:
-                    message = `Обработка: ${current}/${total}`;
-            }
-            detailsElement.textContent = message;
-        }
-    }
-}
-
-function updateLoadingOverlay(stage, message, details) {
-    if (loadingOverlay) {
-        const textElement = loadingOverlay.querySelector('.loading-text');
-        const detailsElement = loadingOverlay.querySelector('.loading-details');
-
-        if (textElement) textElement.textContent = message;
-        if (detailsElement) detailsElement.textContent = details;
-
-        // Меняем цвет спиннера в зависимости от этапа
-        const spinner = loadingOverlay.querySelector('.loading-spinner');
-        if (spinner) {
-            switch(stage) {
-                case 'final':
-                case 'complete':
-                    spinner.style.borderTopColor = '#2ecc71';
-                    break;
-                case 'error':
-                    spinner.style.borderTopColor = '#e74c3c';
-                    break;
-                default:
-                    spinner.style.borderTopColor = '#3498db';
-            }
-        }
-    }
-}
-
 // --- Функция обновления UI ---
 function updateUI() {
-    if (!zipFileInput || !dropArea || !uploadBtn || !manageBtn) {
+    if (!zipFileInput || !dropArea || !uploadBtn) {
         console.error('DOM elements not initialized for updateUI');
         return;
     }
@@ -1166,7 +1117,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         let albumName = data.album_name || file.name.replace(/\.zip$/i, '');
                         currentAlbumName = albumName;
 
-                        updateLoadingOverlay('final', 'Всё готово!', 'Обновляем список файлов...');
+                        showLoadingOverlay('final', 'Всё готово!', 'Обновляем список файлов...');
 
                         setTimeout(() => {
                             showFilesForAlbum(albumName).then(() => {
