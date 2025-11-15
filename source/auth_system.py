@@ -167,9 +167,6 @@ class AuthManager:
             # Получаем роли пользователя для отображения
             user_roles = user.get('user_roles', [])
 
-            # Проверяем, есть ли у пользователя роль appadmin
-            is_appadmin = 'appadmin' in user_roles
-
             # Подготовим словарь с информацией о пользователе для шаблона
             user_info = {
                 'name': user.get('name', 'Не указано'),
@@ -182,8 +179,8 @@ class AuthManager:
 
             return render_template('profile.html',
                                    user_info=user_info,
-                                   user_roles=user_roles,
-                                   is_appadmin=is_appadmin)
+                                   user_roles=user_roles
+                                   )
 
     def _handle_login(self):
         """Обработка входа"""
@@ -482,17 +479,6 @@ def user_has_any_role(roles):
     user_roles = user.get('user_roles', [])
     return any(role in user_roles for role in roles)
 
-
-def is_app_admin():
-    """Проверяет, является ли пользователь appadmin"""
-    return user_has_any_role(['appadmin'])
-
-
-def is_app_user():
-    """Проверяет, является ли пользователь appuser"""
-    return user_has_any_role(['appuser', 'appadmin'])
-
-
 def user_has_permission(permission):
     """Проверяет, есть ли у пользователя указанный пермишен"""
     user = get_current_user()
@@ -503,24 +489,11 @@ def user_has_permission(permission):
     return permission in user_permissions
 
 
-def user_has_any_permission(permissions):
-    """Проверяет, есть ли у пользователя хотя бы один из указанных пермишенов"""
-    user = get_current_user()
-    if not user:
-        return False
-
-    user_permissions = user.get('user_permissions', [])
-    return any(perm in user_permissions for perm in permissions)
-
-
 # Контекстные процессоры для шаблонов
 def auth_context_processor():
     """Добавляет переменные аутентификации в контекст шаблонов"""
     user = get_current_user()
     is_auth = is_authenticated()
-    is_admin = is_app_admin()
-    is_user = is_app_user()
-
     # Получаем все пермишены пользователя
     user_permissions = user.get('user_permissions', []) if user else []
 
@@ -529,8 +502,6 @@ def auth_context_processor():
         'is_authenticated': is_auth,  # Булево значение
         'user_has_role': user_has_role,  # Функция
         'user_roles': get_user_roles(),  # Список ролей
-        'is_app_admin': is_admin,  # Булево значение
-        'is_app_user': is_user,  # Булево значение
         'user_permissions': user_permissions,  # Список пермишенов
         'has_permission': lambda perm: perm in user_permissions,  # Функция проверки пермишена
         'Permissions': Permissions  # Класс пермишенов для использования в шаблонах

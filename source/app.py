@@ -1,9 +1,9 @@
 # app.py
 
-from auth_system import AuthManager, login_required, admin_required, role_required, auth_context_processor, \
-    is_authenticated, get_current_user, permission_required, any_permission_required, Permissions
+from auth_system import AuthManager, login_required, auth_context_processor, \
+    is_authenticated, get_current_user, permission_required, Permissions
 import os
-from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file, current_app
+from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
 import logging
 from PIL import Image
 import io

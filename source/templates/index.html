@@ -870,9 +870,17 @@
                             <button type="button" class="btn" id="browseBtn">Выбрать файл</button>
                             <input type="file" id="zipFile" name="zipfile" accept=".zip" class="file-input">
                         </div>
+
+                        {% if has_permission(Permissions.UPLOAD_ZIP) %}
                         <button type="submit" class="btn" id="uploadBtn" disabled>
                             <span>Загрузить архив</span>
                         </button>
+                        {% else %}
+                        <button type="button" class="btn" disabled style="background: #adb5bd;">
+                            <span>❌ Нет прав для загрузки</span>
+                        </button>
+                        {% endif %}
+
                         <div id="progressContainer">
                             <div id="progressBar">
                                 <span id="progressText">0%</span>
@@ -880,8 +888,9 @@
                         </div>
                     </form>
 
-                    <!-- Статистика -->
-                    <div class="stats-card" id="statsCard" style="display: none;">
+                    <!-- Статистика - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВО SYNC_DATABASE -->
+                    {% if has_permission(Permissions.SYNC_DATABASE) %}
+                    <div class="stats-card" id="statsCard" style="display: block;">
                         <h3>📊 Статистика системы</h3>
                         <div class="stats-content">
                             <div class="stat-item">
@@ -906,6 +915,7 @@
                             🔄 Обновить
                         </button>
                     </div>
+                    {% endif %}
 
                     <button class="btnmanage" id="manageBtn">
                         <span>Управление ссылками</span>
@@ -929,16 +939,20 @@
                             </select>
                         </div>
 
-                        <!-- Контейнер для кнопок удаления -->
+                        <!-- Контейнер для кнопок удаления - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВА НА УПРАВЛЕНИЕ -->
+                        {% if has_permission(Permissions.MANAGE_ALBUMS) or has_permission(Permissions.MANAGE_ARTICLES) %}
                         <div id="deleteButtonsContainer" class="delete-buttons-container">
                             <!-- Кнопки будут созданы динамически -->
                         </div>
+                        {% endif %}
 
+                        {% if has_permission(Permissions.EXPORT_DATA) %}
                         <div class="selector-group">
                             <button class="btn" id="createXlsxBtn" disabled>
                                 <span>📊 Создать документ XLSX</span>
                             </button>
                         </div>
+                        {% endif %}
                     </div>
                     <button class="btnmanage" id="backToUploadBtn">
                         <span>Назад к загрузке</span>
@@ -948,10 +962,22 @@
             <div class="column-right">
                 <div class="card links-section">
                     <h2>
-                        <span id="currentAlbumTitle">Прямые ссылки на изображения</span>
+                        <span id="currentAlbumTitle">
+                            {% if has_permission(Permissions.VIEW_FILES) %}
+                                Прямые ссылки на изображения
+                            {% else %}
+                                ❌ Нет прав для просмотра файлов
+                            {% endif %}
+                        </span>
                     </h2>
                     <ul id="linkList" class="link-list">
-                        <div class="empty-state">Загрузите ZIP-архив, чтобы получить прямые ссылки на изображения</div>
+                        {% if has_permission(Permissions.VIEW_FILES) %}
+                            <div class="empty-state">Загрузите ZIP-архив, чтобы получить прямые ссылки на изображения</div>
+                        {% else %}
+                            <div class="empty-state" style="color: #e74c3c;">
+                                ❌ У вас нет прав для просмотра файлов. Обратитесь к администратору.
+                            </div>
+                        {% endif %}
                     </ul>
                 </div>
             </div>
