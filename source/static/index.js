@@ -1,8 +1,7 @@
 // static/index.js
 
 // --- Инициализация глобальных переменных ---
-console.log('User initialized:', window.currentUser);
-console.log('Authenticated:', window.is_authenticated);
+console.log('PicHost initialized');
 
 // --- Функция форматирования размера файла ---
 function formatFileSize(bytes) {
@@ -814,11 +813,8 @@ function updateDeleteButtonsState() {
 
 // --- Инициализация кнопок удаления ---
 function initDeleteButtons() {
-    const isAppAdmin = window.currentUser && window.currentUser.isAppAdmin;
-
-    if (!isAppAdmin) {
-        return;
-    }
+    // Просто создаем кнопки для всех авторизованных пользователей
+    // Сервер сам проверит права и вернет 403 если нет доступа
 
     let deleteButtonsContainer = document.getElementById('deleteButtonsContainer');
     if (!deleteButtonsContainer) {
@@ -1106,8 +1102,8 @@ document.addEventListener('DOMContentLoaded', function() {
         xhr.addEventListener('load', function() {
             progressContainer.style.display = 'none';
             showLoadingOverlay(
-                'Кукареку!',
-                'Кукареку! Получаем ответ от сервера...'
+                'Обработка...',
+                'Получаем ответ от сервера...'
             );
 
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -1117,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         let albumName = data.album_name || file.name.replace(/\.zip$/i, '');
                         currentAlbumName = albumName;
 
-                        showLoadingOverlay('final', 'Всё готово!', 'Обновляем список файлов...');
+                        showLoadingOverlay('Завершение', 'Всё готово!', 'Обновляем список файлов...');
 
                         setTimeout(() => {
                             showFilesForAlbum(albumName).then(() => {
