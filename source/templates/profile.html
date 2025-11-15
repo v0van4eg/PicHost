@@ -1,154 +1,52 @@
+<!-- templates/profile.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Профиль пользователя</title>
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <style>
-        {% raw %}
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        html, body {
-            height: 100%;
-            background: #e9ecef;
-            color: #333;
-            padding: 10px;
-            overflow: hidden; /* Скрыли прокрутку body */
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 20px); /* Занимает всю высоту окна минус отступы */
-            overflow: hidden; /* Предотвращает прокрутку контейнера */
-        }
-        header {
-            text-align: center;
-            margin-bottom: 10px;
-            flex-shrink: 0; /* Не сжимается */
-        }
-        h1 {
-            font-size: 2.2rem;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-        .subtitle {
-            color: #6c757d;
-            font-size: 1.0rem;
-        }
-        .columns {
-            display: flex;
-            gap: 24px;
-            flex: 1; /* Занимает оставшееся место */
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонок */
-        }
-        .column-left {
-            flex: 0 0 25%; /* Ширина 25% */
-            min-width: 0; /* Позволяет колонке сжиматься */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
-        }
-        .column-right {
-            flex: 1; /* Оставшаяся ширина */
-            min-width: 0; /* Позволяет колонке сжиматься */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
-        }
-        .card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            flex: 1; /* Растягивается на доступное пространство */
-            overflow: hidden; /* Предотвращает прокрутку внутри карточки */
-        }
-        .card-content {
-            overflow-y: auto; /* Добавляет прокрутку к содержимому карточки, если оно не помещается */
-            flex: 1; /* Позволяет содержимому заполнять доступное пространство */
-            padding: 10px; /* Добавим внутренний отступ для удобства */
-        }
-        .user-info {
-            background: #e2e8f0; /* Светло-серый фон */
-            padding: 20px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        .roles-section {
-            background: #e2e8f0; /* Светло-серый фон */
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        .role-item {
-            padding: 5px 10px;
-            margin: 2px;
-            background: #cbd5e0; /* Более темный серый для бейджа роли */
-            border-radius: 4px;
-            display: inline-block;
-            font-size: 0.9em;
-        }
-        .profile-actions {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .profile-actions a {
-            color: #007bff;
-            text-decoration: underline;
-        }
-        .profile-actions a:hover {
-            text-decoration: none;
-        }
-        {% endraw %}
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>👤 Профиль пользователя</h1>
+            <a href="/">На главную</a>
         </header>
-        <div class="columns">
-            <!-- Скрыли левую колонку -->
-            <div class="column-right">
-                <div class="card">
-                    <div class="card-content">
-                        <div class="user-info">
-                            <p><strong>Логин:</strong> {{ user_info.name or 'Не указано' }}</p>
-                            <p><strong>Имя:</strong> {{ user_info.given_name or '—' }}</p>
-                            <p><strong>Фамилия:</strong> {{ user_info.family_name or '—' }}</p>
-                            <p><strong>Полное имя:</strong> {{ user_info.full_name or 'Не указано' }}</p>
-                            <p><strong>Email:</strong> {{ user_info.email or 'Не указан' }}</p>
-                            <p><strong>ID:</strong> {{ user_info.sub or 'Не указан' }}</p>
-                        </div>
 
-                        <div class="roles-section">
-                            <h3>📋 Доступные роли ({{ display_roles|length }})</h3>
-                            <div>
-                                {% for role in display_roles %}
-                                    <span class="role-item">{{ role }}</span>
-                                {% else %}
-                                    <p>Нет доступных ролей</p>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        <div class="profile-actions">
-                            <a href="/">← На главную</a>
-                            {% if is_appadmin %}
-                                | <a href="/admin">🛠️ Админ-панель</a> |
-                            {% endif %}
-                            <a href="/logout">🚪 Выйти</a>
-                        </div>
-                    </div>
-                </div>
+        <div class="profile-card">
+            <h2>Основная информация</h2>
+            <div class="profile-info">
+                <p><strong>Имя пользователя:</strong> {{ user_info.name }}</p>
+                <p><strong>Имя:</strong> {{ user_info.given_name or 'Не указано' }}</p>
+                <p><strong>Фамилия:</strong> {{ user_info.family_name or 'Не указано' }}</p>
+                <p><strong>Полное имя:</strong> {{ user_info.full_name }}</p>
+                <p><strong>Email:</strong> {{ user_info.email }}</p>
+                <p><strong>ID:</strong> {{ user_info.sub }}</p>
+            </div>
+
+            <h2>Роли в системе</h2>
+            <div class="profile-roles">
+                {% if user_roles %}
+                    <ul>
+                        {% for role in user_roles %}
+                            <li>{{ role }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Нет назначенных ролей</p>
+                {% endif %}
+            </div>
+
+            {% if is_appadmin %}
+            <div class="admin-notice">
+                <p>✅ Вы имеете права администратора системы</p>
+                <a href="/admin">Перейти в панель администратора</a>
+            </div>
+            {% endif %}
+
+            <div class="profile-actions">
+                <a href="/logout" class="btn btn-logout">Выйти</a>
             </div>
         </div>
     </div>

@@ -358,7 +358,7 @@ def api_stats():
 @app.route('/')
 def index():
     # Используем функцию из контекстного процессора
-    if is_authenticated():
+    if is_authenticated:
         return render_template('index.html', base_url=base_url)
     else:
         return render_template('hello.html')

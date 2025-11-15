@@ -896,7 +896,8 @@
                             </div>
                         </div>
                     </form>
-                    <!-- Вставить в column-left, после uploadForm и перед manageBtn -->
+
+                    <!-- Статистика теперь здесь -->
                     <div class="stats-card" id="statsCard" style="display: none;">
                         <h3>📊 Статистика системы</h3>
                         <div class="stats-content">
@@ -922,10 +923,12 @@
                             🔄 Обновить
                         </button>
                     </div>
+
                     <button class="btnmanage" id="manageBtn">
                         <span>Управление ссылками</span>
                     </button>
                 </div>
+
                 <!-- Карточка управления ссылками -->
                 <div id="manageCard" style="display: none;">
                     <h2>Управление ссылками</h2>
@@ -972,7 +975,7 @@
         </div>
     </div>
 
-    <!-- Обновленное модальное окно создания XLSX -->
+    <!-- Модальное окно создания XLSX -->
     <div id="xlsxModal" class="xlsx-modal">
         <div class="xlsx-modal-content">
             <div class="xlsx-modal-header">
@@ -1003,19 +1006,21 @@
         </div>
     </div>
 
-        <!-- Оверлей загрузки -->
+    <!-- Оверлей загрузки -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner"></div>
         <div class="loading-text">Обработка архива...</div>
         <div class="loading-details">Распаковываем файлы и создаем превью. Это может занять несколько минут.</div>
     </div>
 
-    <script src="{{ url_for('static', filename='index.js') }}"></script>    <script>
+    <script src="{{ url_for('static', filename='index.js') }}"></script>
+    <script>
         // Передаем информацию о ролях пользователя в JavaScript
         window.currentUser = {
-            isAppAdmin: {% if is_app_admin() %}true{% else %}false{% endif %},
-            isAppUser: {% if is_app_user() %}true{% else %}false{% endif %}
+            isAppAdmin: {% if is_app_admin %}true{% else %}false{% endif %},
+            isAppUser: {% if is_app_user %}true{% else %}false{% endif %}
         };
+        window.is_authenticated = {% if is_authenticated %}true{% else %}false{% endif %};
     </script>
 </body>
 </html>

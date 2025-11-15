@@ -8,6 +8,10 @@ import secrets
 import os
 from authlib.integrations.flask_client import OAuth
 from utils import log_user_login, log_user_logout
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AuthManager:
@@ -29,9 +33,8 @@ class AuthManager:
         scope = os.getenv('OAUTH_SCOPE', 'openid profile email')
         code_challenge_method = os.getenv('OAUTH_CODE_CHALLENGE_METHOD', 'S256')
 
-        # Конфигурация фильтрации ролей
-        self.custom_roles_prefix = os.getenv('CUSTOM_ROLES_PREFIX', 'app')  # Роли начинающиеся с этого префикса
-        self.hide_default_roles = os.getenv('HIDE_DEFAULT_ROLES', 'true').lower() == 'true'
+        # Упрощенная конфигурация ролей
+        self.allowed_roles = ['appadmin', 'appuser', 'appviewer']
 
         # Проверка обязательных параметров
         if not client_id:
@@ -60,20 +63,16 @@ class AuthManager:
             app.logger.error(f"Failed to register OAuth client: {e}")
             raise
 
-    def _filter_custom_roles(self, roles):
-        """Фильтрует роли, оставляя только кастомные"""
-        if not self.hide_default_roles:
-            return roles
+    def _filter_user_roles(self, all_roles):
+        """Фильтрует роли, оставляя только разрешенные"""
+        user_roles = []
+        for role in all_roles:
+            if role in self.allowed_roles:
+                user_roles.append(role)
 
-        filtered_roles = []
-        for role in roles:
-            # Оставляем только роли с заданным префиксом
-            if role.startswith(self.custom_roles_prefix):
-                filtered_roles.append(role)
-
-        self.app.logger.info(f"Role filtering: {len(roles)} -> {len(filtered_roles)} roles")
-        self.app.logger.info(f"Filtered roles: {filtered_roles}")
-        return filtered_roles
+        self.app.logger.info(f"Role filtering: {len(all_roles)} -> {len(user_roles)} roles")
+        self.app.logger.info(f"User roles: {user_roles}")
+        return user_roles
 
     def register_routes(self):
         """Регистрация маршрутов аутентификации"""
@@ -100,12 +99,11 @@ class AuthManager:
             family_name = user.get('family_name', '').strip()
             full_name = f"{given_name} {family_name}".strip() or user.get('name', 'Не указано')
 
-            # Получаем отфильтрованные роли для отображения
-            display_roles = user.get('display_roles', [])
-            all_roles = user.get('roles', [])
+            # Получаем роли пользователя для отображения
+            user_roles = user.get('user_roles', [])
 
             # Проверяем, есть ли у пользователя роль appadmin
-            is_appadmin = 'appadmin' in all_roles # или display_roles, в зависимости от вашей логики
+            is_appadmin = 'appadmin' in user_roles
 
             # Подготовим словарь с информацией о пользователе для шаблона
             user_info = {
@@ -119,8 +117,7 @@ class AuthManager:
 
             return render_template('profile.html',
                                    user_info=user_info,
-                                   display_roles=display_roles,
-                                   all_roles=all_roles,
+                                   user_roles=user_roles,
                                    is_appadmin=is_appadmin)
 
     def _handle_login(self):
@@ -160,11 +157,8 @@ class AuthManager:
             access_token = token['access_token']
             decoded_token = self._decode_jwt_payload(access_token)
 
-            # Извлекаем роли
-            realm_access = decoded_token.get('realm_access', {})
+            # Извлекаем роли из ресурса (client roles)
             resource_access = decoded_token.get('resource_access', {})
-
-            realm_roles = realm_access.get('roles', [])
             client_roles = []
 
             # Получаем роли клиента
@@ -172,27 +166,21 @@ class AuthManager:
             if client_id in resource_access:
                 client_roles = resource_access[client_id].get('roles', [])
 
-            all_roles = realm_roles + client_roles
+            # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
+            user_roles = self._filter_user_roles(client_roles)
 
-            # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только кастомные
-            display_roles = self._filter_custom_roles(all_roles)
-
-            # Сохраняем пользователя в сессии
+            # МИНИМАЛЬНЫЕ ДАННЫЕ В СЕССИИ
             session_user_data = {
+                'sub': user_info.get('sub'),
                 'name': user_info.get('preferred_username', user_info.get('email', 'Unknown')),
+                'email': user_info.get('email', ''),
                 'given_name': user_info.get('given_name', ''),
                 'family_name': user_info.get('family_name', ''),
-                'email': user_info.get('email', 'No email'),
-                'sub': user_info.get('sub'),
-                'roles': all_roles,  # Все роли (для проверок)
-                'display_roles': display_roles,  # Только отображаемые роли
-                'realm_roles': realm_roles,
-                'client_roles': client_roles
+                'user_roles': user_roles  # Только отфильтрованные роли
             }
 
             session['user'] = session_user_data
-            session['access_token'] = token['access_token']
-            session['id_token'] = token.get('id_token')
+            session['id_token'] = token.get('id_token')  # Только для logout
             session.permanent = True
 
             # ЛОГИРОВАНИЕ УСПЕШНОГО ВХОДА
@@ -202,7 +190,7 @@ class AuthManager:
                 self.app.logger.error(f"Failed to log user login: {log_error}")
 
             self.app.logger.info(f"User {user_info.get('preferred_username')} logged in successfully")
-            self.app.logger.info(f"User roles - All: {all_roles}, Display: {display_roles}")
+            self.app.logger.info(f"User roles: {user_roles}")
             return redirect(redirect_to)
 
         except Exception as e:
@@ -243,8 +231,6 @@ class AuthManager:
             # При ошибке тоже редиректим на /hello
             return redirect(url_for('hello'))
 
-
-
     def _decode_jwt_payload(self, token):
         """Декодирует JWT payload без проверки подписи"""
         try:
@@ -264,7 +250,6 @@ class AuthManager:
         except Exception as e:
             self.app.logger.error(f"Token decode error: {str(e)}")
             return {}
-
 
     def _create_logout_url(self, post_logout_redirect_uri, id_token=None):
         """Создает URL для выхода из Keycloak"""
@@ -314,7 +299,7 @@ def role_required(required_roles):
             if not session.get('user'):
                 return redirect(url_for('login', next=request.url))
 
-            user_roles = session['user'].get('roles', [])  # Проверяем по всем ролям
+            user_roles = session['user'].get('user_roles', [])  # Проверяем по отфильтрованным ролям
 
             # Проверяем есть ли хотя бы одна из требуемых ролей
             if not any(role in user_roles for role in required_roles):
@@ -337,7 +322,7 @@ def role_required(required_roles):
 
 def admin_required(f):
     """Декоратор для проверки прав администратора"""
-    return role_required(['appadmin', 'administrator'])(f)
+    return role_required(['appadmin'])(f)
 
 
 # Утилиты для работы с пользователями
@@ -349,19 +334,13 @@ def get_current_user():
 def user_has_role(role):
     """Проверяет, есть ли у пользователя указанная роль"""
     user = get_current_user()
-    return user and role in user.get('roles', [])  # Проверяем по всем ролям
+    return user and role in user.get('user_roles', [])  # Проверяем по отфильтрованным ролям
 
 
 def get_user_roles():
     """Возвращает роли текущего пользователя"""
     user = get_current_user()
-    return user.get('roles', []) if user else []
-
-
-def get_display_roles():
-    """Возвращает только отображаемые роли текущего пользователя"""
-    user = get_current_user()
-    return user.get('display_roles', []) if user else []
+    return user.get('user_roles', []) if user else []
 
 
 def is_authenticated():
@@ -369,26 +348,12 @@ def is_authenticated():
     return 'user' in session
 
 
-# Контекстные процессоры для шаблонов
-def auth_context_processor():
-    """Добавляет переменные аутентификации в контекст шаблонов"""
-    return {
-        'current_user': get_current_user(),
-        'is_authenticated': is_authenticated(),
-        'user_has_role': user_has_role,
-        'user_roles': get_user_roles(),
-        'display_roles': get_display_roles,  # Добавляем функцию для получения отображаемых ролей
-        'is_app_admin': is_app_admin,
-        'is_app_user': is_app_user
-    }
-
-
 def user_has_any_role(roles):
     """Проверяет, есть ли у пользователя хотя бы одна из указанных ролей"""
     user = get_current_user()
     if not user:
         return False
-    user_roles = user.get('roles', [])
+    user_roles = user.get('user_roles', [])
     return any(role in user_roles for role in roles)
 
 
@@ -400,3 +365,21 @@ def is_app_admin():
 def is_app_user():
     """Проверяет, является ли пользователь appuser"""
     return user_has_any_role(['appuser', 'appadmin'])
+
+
+# Контекстные процессоры для шаблонов
+def auth_context_processor():
+    """Добавляет переменные аутентификации в контекст шаблонов"""
+    user = get_current_user()
+    is_auth = is_authenticated()
+    is_admin = is_app_admin()
+    is_user = is_app_user()
+
+    return {
+        'current_user': user,
+        'is_authenticated': is_auth,  # Булево значение
+        'user_has_role': user_has_role,  # Функция
+        'user_roles': get_user_roles(),  # Список ролей
+        'is_app_admin': is_admin,  # Булево значение
+        'is_app_user': is_user  # Булево значение
+    }
