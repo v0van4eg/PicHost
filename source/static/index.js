@@ -241,18 +241,55 @@ function stopStatsAutoRefresh() {
 
 // --- Инициализация прав пользователя ---
 function initUserPermissions() {
-    // Получаем информацию о правах из data-атрибутов или других источников
+    const body = document.body;
+
     userPermissions = {
-        canUpload: document.getElementById('uploadBtn') !== null && !document.getElementById('uploadBtn').disabled,
-        canManageAlbums: document.getElementById('deleteButtonsContainer') !== null,
-        canManageArticles: document.getElementById('deleteButtonsContainer') !== null,
-        canExport: document.getElementById('createXlsxBtn') !== null,
-        canViewFiles: document.querySelector('.links-section .empty-state') !== null,
-        canViewStats: document.getElementById('statsCard') !== null &&
-                     document.getElementById('statsCard').style.display !== 'none'
+        canUpload: body.getAttribute('data-can-upload') === 'true',
+        canManageAlbums: body.getAttribute('data-can-manage-albums') === 'true',
+        canManageArticles: body.getAttribute('data-can-manage-articles') === 'true',
+        canExport: body.getAttribute('data-can-export') === 'true',
+        canViewFiles: body.getAttribute('data-can-view-files') === 'true',
+        canViewStats: body.getAttribute('data-can-view-stats') === 'true'
     };
 
     console.log('👤 User permissions:', userPermissions);
+
+    // Визуально обновляем интерфейс на основе прав
+    updateUIForPermissions();
+}
+
+// --- Обновление интерфейса на основе прав ---
+function updateUIForPermissions() {
+    // Управление кнопкой загрузки
+    const uploadBtn = document.getElementById('uploadBtn');
+    if (uploadBtn) {
+        if (!userPermissions.canUpload) {
+            uploadBtn.style.display = 'none';
+        }
+    }
+
+    // Управление карточкой управления
+    const manageBtn = document.getElementById('manageBtn');
+    if (manageBtn) {
+        // Показываем кнопку управления только если есть хотя бы одно из прав
+        const hasAnyManagementPermission = userPermissions.canManageAlbums ||
+                                         userPermissions.canManageArticles ||
+                                         userPermissions.canExport;
+        if (!hasAnyManagementPermission) {
+            manageBtn.style.display = 'none';
+        }
+    }
+
+    // Управление секцией просмотра файлов
+    const linksSection = document.querySelector('.links-section');
+    if (linksSection && !userPermissions.canViewFiles) {
+        linksSection.innerHTML = `
+            <h2>❌ Доступ запрещен</h2>
+            <div class="empty-state" style="color: #e74c3c;">
+                ❌ У вас нет прав для просмотра файлов. Обратитесь к администратору.
+            </div>
+        `;
+    }
 }
 
 // --- Система ленивой загрузки изображений ---
@@ -330,10 +367,6 @@ function initializeElements() {
     separatorSelect = document.getElementById('separatorSelect');
     generateXlsxBtn = document.getElementById('generateXlsxBtn');
     cancelXlsxBtn = document.getElementById('cancelXlsxBtn');
-
-    // Элементы для удаления
-    deleteAlbumBtn = document.getElementById('deleteAlbumBtn');
-    deleteArticleBtn = document.getElementById('deleteArticleBtn');
 
     // Проверяем только основные элементы
     if (!dropArea || !zipFileInput || !browseBtn || !uploadForm || !linkList || !currentAlbumTitle || !progressContainer || !progressBar || !progressText || !loadingOverlay) {
@@ -1133,8 +1166,9 @@ document.addEventListener('DOMContentLoaded', function() {
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        // ПРЯМАЯ ПРОВЕРКА ПРАВ
         if (!userPermissions.canUpload) {
-            alert('❌ У вас нет прав для загрузки файлов');
+            alert('❌ У вас нет прав для загрузки файлов. Обратитесь к администратору.');
             return;
         }
 
@@ -1259,6 +1293,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.error('Элементы для переключения карточек не найдены');
     }
+
 
     // Инициализируем UI
     updateUI();

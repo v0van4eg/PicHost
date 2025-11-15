@@ -7,7 +7,7 @@
     <title>PicHost — Хостинг изображений</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <style>
-        /* --- CSS с добавленными стилями для селекторов --- */
+        /* Все стили остаются без изменений */
         * {
             margin: 0;
             padding: 0;
@@ -841,7 +841,12 @@
         }
     </style>
 </head>
-<body>
+<body data-can-upload="{{ 'true' if has_permission(Permissions.UPLOAD_ZIP) else 'false' }}"
+      data-can-manage-albums="{{ 'true' if has_permission(Permissions.MANAGE_ALBUMS) else 'false' }}"
+      data-can-manage-articles="{{ 'true' if has_permission(Permissions.MANAGE_ARTICLES) else 'false' }}"
+      data-can-export="{{ 'true' if has_permission(Permissions.EXPORT_DATA) else 'false' }}"
+      data-can-view-files="{{ 'true' if has_permission(Permissions.VIEW_FILES) else 'false' }}"
+      data-can-view-stats="{{ 'true' if has_permission(Permissions.SYNC_DATABASE) else 'false' }}">
     <div class="container">
         <header style="display: flex; justify-content: center; align-items: center; position: relative;">
             <div style="text-align: center;">
@@ -871,14 +876,18 @@
                             <input type="file" id="zipFile" name="zipfile" accept=".zip" class="file-input">
                         </div>
 
-                        {% if has_permission(Permissions.UPLOAD_ZIP) %}
-                        <button type="submit" class="btn" id="uploadBtn" disabled>
+                        <button type="submit" class="btn" id="uploadBtn" disabled
+                                {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                             <span>Загрузить архив</span>
                         </button>
-                        {% else %}
-                        <button type="button" class="btn" disabled style="background: #adb5bd;">
-                            <span>❌ Нет прав для загрузки</span>
-                        </button>
+
+                        {% if not has_permission(Permissions.UPLOAD_ZIP) %}
+                        <div style="text-align: center; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; margin-top: 10px;">
+                            <p style="margin: 0; color: #856404;">❌ У вас нет прав для загрузки файлов</p>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9rem; color: #856404;">
+                                Обратитесь к администратору для получения прав
+                            </p>
+                        </div>
                         {% endif %}
 
                         <div id="progressContainer">
@@ -890,7 +899,7 @@
 
                     <!-- Статистика - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВО SYNC_DATABASE -->
                     {% if has_permission(Permissions.SYNC_DATABASE) %}
-                    <div class="stats-card" id="statsCard" style="display: block;">
+                    <div class="stats-card" id="statsCard">
                         <h3>📊 Статистика системы</h3>
                         <div class="stats-content">
                             <div class="stat-item">
