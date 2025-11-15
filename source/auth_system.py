@@ -1,6 +1,6 @@
 # auth_system.py
 
-from flask import session, redirect, url_for, request, render_template
+from flask import session, redirect, url_for, request, render_template, current_app
 from functools import wraps
 import base64
 import json
@@ -14,10 +14,61 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# Система пермишенов
+class Permissions:
+    # Просмотр
+    VIEW_ALBUMS = 'view_albums'
+    VIEW_ARTICLES = 'view_articles'
+    VIEW_FILES = 'view_files'
+
+    # Загрузка
+    UPLOAD_ZIP = 'upload_zip'
+
+    # Управление
+    MANAGE_ALBUMS = 'manage_albums'
+    MANAGE_ARTICLES = 'manage_articles'
+    EXPORT_DATA = 'export_data'
+
+    # Администрирование
+    ACCESS_ADMIN = 'access_admin'
+    VIEW_LOGS = 'view_logs'
+    SYNC_DATABASE = 'sync_database'
+
+
+# Маппинг ролей на пермишены
+ROLE_PERMISSIONS = {
+    'appviewer': [
+        Permissions.VIEW_ALBUMS,
+        Permissions.VIEW_ARTICLES,
+        Permissions.VIEW_FILES
+    ],
+    'appuser': [
+        Permissions.VIEW_ALBUMS,
+        Permissions.VIEW_ARTICLES,
+        Permissions.VIEW_FILES,
+        Permissions.UPLOAD_ZIP,
+        Permissions.EXPORT_DATA
+    ],
+    'appadmin': [
+        Permissions.VIEW_ALBUMS,
+        Permissions.VIEW_ARTICLES,
+        Permissions.VIEW_FILES,
+        Permissions.UPLOAD_ZIP,
+        Permissions.MANAGE_ALBUMS,
+        Permissions.MANAGE_ARTICLES,
+        Permissions.EXPORT_DATA,
+        Permissions.ACCESS_ADMIN,
+        Permissions.VIEW_LOGS,
+        Permissions.SYNC_DATABASE
+    ]
+}
+
+
 class AuthManager:
     def __init__(self, app=None):
         self.oauth = None
         self.app = None
+        self.role_permissions = ROLE_PERMISSIONS
         if app is not None:
             self.init_app(app)
 
@@ -73,6 +124,20 @@ class AuthManager:
         self.app.logger.info(f"Role filtering: {len(all_roles)} -> {len(user_roles)} roles")
         self.app.logger.info(f"User roles: {user_roles}")
         return user_roles
+
+    def _get_user_permissions(self, user_roles):
+        """Получить все пермишены пользователя на основе ролей"""
+        permissions = set()
+        for role in user_roles:
+            if role in self.role_permissions:
+                permissions.update(self.role_permissions[role])
+        return permissions
+
+    def user_has_permission(self, user, permission):
+        """Проверить наличие пермишена у пользователя"""
+        user_roles = user.get('user_roles', [])
+        user_permissions = self._get_user_permissions(user_roles)
+        return permission in user_permissions
 
     def register_routes(self):
         """Регистрация маршрутов аутентификации"""
@@ -169,6 +234,9 @@ class AuthManager:
             # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
             user_roles = self._filter_user_roles(client_roles)
 
+            # Получаем пермишены пользователя
+            user_permissions = self._get_user_permissions(user_roles)
+
             # МИНИМАЛЬНЫЕ ДАННЫЕ В СЕССИИ
             session_user_data = {
                 'sub': user_info.get('sub'),
@@ -176,7 +244,8 @@ class AuthManager:
                 'email': user_info.get('email', ''),
                 'given_name': user_info.get('given_name', ''),
                 'family_name': user_info.get('family_name', ''),
-                'user_roles': user_roles  # Только отфильтрованные роли
+                'user_roles': user_roles,  # Только отфильтрованные роли
+                'user_permissions': list(user_permissions)  # Список пермишенов
             }
 
             session['user'] = session_user_data
@@ -191,6 +260,7 @@ class AuthManager:
 
             self.app.logger.info(f"User {user_info.get('preferred_username')} logged in successfully")
             self.app.logger.info(f"User roles: {user_roles}")
+            self.app.logger.info(f"User permissions: {user_permissions}")
             return redirect(redirect_to)
 
         except Exception as e:
@@ -290,6 +360,62 @@ def login_required(f):
     return decorated_function
 
 
+def permission_required(permission):
+    """Декоратор для проверки конкретного пермишена"""
+
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not session.get('user'):
+                return redirect(url_for('login', next=request.url))
+
+            user = session['user']
+            auth_manager = current_app.config.get('auth_manager')
+
+            if not auth_manager or not auth_manager.user_has_permission(user, permission):
+                return f'''
+                <h1>Доступ запрещен</h1>
+                <p>У вас недостаточно прав для выполнения этого действия.</p>
+                <p><strong>Требуется право:</strong> {permission}</p>
+                <a href="/">На главную</a>
+                ''', 403
+
+            return f(*args, **kwargs)
+
+        return decorated_function
+
+    return decorator
+
+
+def any_permission_required(permissions):
+    """Декоратор для проверки любого из пермишенов"""
+
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not session.get('user'):
+                return redirect(url_for('login', next=request.url))
+
+            user = session['user']
+            auth_manager = current_app.config.get('auth_manager')
+
+            if auth_manager:
+                for permission in permissions:
+                    if auth_manager.user_has_permission(user, permission):
+                        return f(*args, **kwargs)
+
+            return f'''
+            <h1>Доступ запрещен</h1>
+            <p>У вас недостаточно прав для выполнения этого действия.</p>
+            <p><strong>Требуется одно из прав:</strong> {', '.join(permissions)}</p>
+            <a href="/">На главную</a>
+            ''', 403
+
+        return decorated_function
+
+    return decorator
+
+
 def role_required(required_roles):
     """Декоратор для проверки ролей пользователя"""
 
@@ -367,6 +493,26 @@ def is_app_user():
     return user_has_any_role(['appuser', 'appadmin'])
 
 
+def user_has_permission(permission):
+    """Проверяет, есть ли у пользователя указанный пермишен"""
+    user = get_current_user()
+    if not user:
+        return False
+
+    user_permissions = user.get('user_permissions', [])
+    return permission in user_permissions
+
+
+def user_has_any_permission(permissions):
+    """Проверяет, есть ли у пользователя хотя бы один из указанных пермишенов"""
+    user = get_current_user()
+    if not user:
+        return False
+
+    user_permissions = user.get('user_permissions', [])
+    return any(perm in user_permissions for perm in permissions)
+
+
 # Контекстные процессоры для шаблонов
 def auth_context_processor():
     """Добавляет переменные аутентификации в контекст шаблонов"""
@@ -375,11 +521,17 @@ def auth_context_processor():
     is_admin = is_app_admin()
     is_user = is_app_user()
 
+    # Получаем все пермишены пользователя
+    user_permissions = user.get('user_permissions', []) if user else []
+
     return {
         'current_user': user,
         'is_authenticated': is_auth,  # Булево значение
         'user_has_role': user_has_role,  # Функция
         'user_roles': get_user_roles(),  # Список ролей
         'is_app_admin': is_admin,  # Булево значение
-        'is_app_user': is_user  # Булево значение
+        'is_app_user': is_user,  # Булево значение
+        'user_permissions': user_permissions,  # Список пермишенов
+        'has_permission': lambda perm: perm in user_permissions,  # Функция проверки пермишена
+        'Permissions': Permissions  # Класс пермишенов для использования в шаблонах
     }
