@@ -144,6 +144,7 @@ class AuthManager:
 
         @self.app.route('/login')
         def login():
+            logger.info("Запуск процесса аутентификации")
             return self._handle_login()
 
         @self.app.route('/auth/callback')
@@ -184,6 +185,7 @@ class AuthManager:
 
     def _handle_login(self):
         """Обработка входа"""
+        logger.info("обработчик входа")
         try:
             nonce = secrets.token_urlsafe(16)
             session['nonce'] = nonce
@@ -359,7 +361,6 @@ def login_required(f):
 
 def permission_required(permission):
     """Декоратор для проверки конкретного пермишена"""
-
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -386,7 +387,6 @@ def permission_required(permission):
 
 def any_permission_required(permissions):
     """Декоратор для проверки любого из пермишенов"""
-
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):

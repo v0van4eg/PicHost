@@ -362,10 +362,10 @@ def api_stats():
 @app.route('/')
 def index():
     # Используем функцию из контекстного процессора
-    if is_authenticated:
+    if is_authenticated():
         # Определяем какой интерфейс показывать на основе прав
         user = get_current_user()
-        logger.info(f"User authenticated: {user}")
+        logger.info(f"User authenticated: {user.get('email', 'Anonymous')}")
         if user and auth_manager.user_has_permission(user, Permissions.UPLOAD_ZIP):
             # Пользователь может загружать - показываем полный интерфейс
             return render_template('index.html', base_url=base_url)
