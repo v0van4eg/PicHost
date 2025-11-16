@@ -5,7 +5,118 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Админ-панель</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        {% raw %}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        html, body {
+            height: 100%;
+            background: #e9ecef;
+            color: #333;
+            padding: 10px;
+            overflow: hidden; /* Скрыли прокрутку body */
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 20px); /* Занимает всю высоту окна минус отступы */
+            overflow: hidden; /* Предотвращает прокрутку контейнера */
+        }
+        header {
+            text-align: center;
+            margin-bottom: 10px;
+            flex-shrink: 0; /* Не сжимается */
+        }
+        h1 {
+            font-size: 2.2rem;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #6c757d;
+            font-size: 1.0rem;
+        }
+        .columns {
+            display: flex;
+            gap: 24px;
+            flex: 1; /* Занимает оставшееся место */
+            overflow: hidden; /* Предотвращает прокрутку контейнера колонок */
+        }
+        .column-left {
+            flex: 0 0 25%; /* Ширина 25% */
+            min-width: 0; /* Позволяет колонке сжиматься */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
+        }
+        .column-right {
+            flex: 1; /* Оставшаяся ширина */
+            min-width: 0; /* Позволяет колонке сжиматься */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
+        }
+        .card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            flex: 1; /* Растягивается на доступное пространство */
+            overflow: hidden; /* Предотвращает прокрутку внутри карточки */
+        }
+        .card-content {
+            overflow-y: auto; /* Добавляет прокрутку к содержимому карточки, если оно не помещается */
+            flex: 1; /* Позволяет содержимому заполнять доступное пространство */
+            padding: 10px; /* Добавим внутренний отступ для удобства */
+        }
+        .user-info {
+            background: #e2e8f0; /* Светло-серый фон */
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .roles-section {
+            background: #e2e8f0; /* Светло-серый фон */
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .role-item {
+            padding: 5px 10px;
+            margin: 2px;
+            background: #cbd5e0; /* Более темный серый для бейджа роли */
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 0.9em;
+        }
+        .admin-features ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .admin-features li {
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .admin-features li:last-child {
+            border-bottom: none;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #007bff;
+            text-decoration: underline;
+        }
+        .back-link:hover {
+            color: #0056b3;
+        }
+        {% endraw %}
+    </style>
 </head>
 <body>
     <div class="container">
@@ -13,22 +124,26 @@
             <h1>🛠️ Админ-панель</h1>
         </header>
         <div class="columns">
+            <!-- Скрыли левую колонку -->
             <div class="column-right">
                 <div class="card">
                     <div class="card-content">
                         <div class="user-info">
                             <h2>Информация о пользователе</h2>
+                            <!-- Основная информация -->
                             <p><strong>Логин:</strong> {{ current_user.name if current_user else 'Аноним' }}</p>
                             <p><strong>Имя:</strong> {{ current_user.given_name if current_user.given_name else '—' }}</p>
                             <p><strong>Фамилия:</strong> {{ current_user.family_name if current_user.family_name else '—' }}</p>
                             <p><strong>Полное имя:</strong> {{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</p>
                             <p><strong>Email:</strong> {{ current_user.email if current_user else 'N/A' }}</p>
                             <p><strong>ID (sub):</strong> {{ current_user.sub if current_user else 'N/A' }}</p>
+                            <!-- Детализированная информация (имя, фамилия) -->
                             <div style="margin-top: 10px; padding: 10px; background: #f1f3f5; border-radius: 6px;">
                                 <p><strong>Отображаемые роли:</strong> {{ display_roles | join(', ') if display_roles else 'Нет ролей' }}</p>
                                 <p><strong>Все роли (OIDC):</strong> {{ all_roles | join(', ') if all_roles else 'Нет ролей' }}</p>
                             </div>
                         </div>
+
                         <div class="admin-features">
                             <h3>Доступные функции администратора:</h3>
                             <ul>
@@ -37,10 +152,12 @@
                                 <li>✅ Управление ролями</li>
                                 <li>✅ Мониторинг безопасности</li>
                                 <li>✅ Резервное копирование</li>
+                                <!-- Новая ссылка -->
                                 <li>📲 <a href="{{ url_for('api_sync') }}">Синхронизировать БД с ФС</a></li>
                                 <li>📋 <a href="{{ url_for('admin_logs') }}">Просмотреть журнал действий</a></li>
                             </ul>
                         </div>
+
                         <a href="{{ url_for('index') }}" class="back-link">← Вернуться на главную</a>
                     </div>
                 </div>

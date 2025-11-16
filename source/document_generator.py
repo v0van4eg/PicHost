@@ -1,11 +1,10 @@
 # document_generator.py
-import os
+
 import tempfile
 import logging
-from openpyxl import Workbook
+import csv
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from urllib.parse import quote
 from database import db_manager
 from utils import log_user_action  # Добавляем импорт
 
@@ -19,110 +18,12 @@ class DocumentGenerator:
         self.base_url = base_url
         self.upload_folder = upload_folder
 
-    def generate_xlsx_export(self, album_name, article_name=None, export_type='in_row', separator=', '):
+    def generate_csv_export(self, album_name, article_name=None):
         """
-        Генерирует XLSX документ с ссылками на изображения
-
-        Args:
-            album_name (str): Название альбома
-            article_name (str, optional): Название артикула. Если None - все артикулы альбома
-            export_type (str): Тип экспорта - 'in_row' (в строку) или 'in_cell' (в ячейку)
-            separator (str): Разделитель для варианта "в ячейку"
-
-        Returns:
-            tuple: (temp_file_path, filename) или (None, error_message)
-        """
-        try:
-            logger.info(
-                f"🔄 Начало генерации XLSX для альбома: {album_name}, артикул: {article_name}, тип: {export_type}")
-
-            # Получаем данные из БД
-            files_data = self._get_files_data(album_name, article_name)
-            if not files_data:
-                logger.warning(f"❌ Не найдены данные для экспорта: альбом={album_name}, артикул={article_name}")
-                return None, "No data found for export"
-
-            logger.info(f"📊 Найдено {len(files_data)} файлов для экспорта")
-
-            # Создаем Excel файл
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Ссылки на изображения"
-
-            # Применяем стили
-            self._apply_header_styles(ws)
-
-            # Генерируем содержимое в зависимости от типа экспорта
-            if export_type == 'in_row':
-                self._generate_in_row_export(ws, files_data)
-                logger.debug("Сгенерирован экспорт типа 'в строку'")
-            elif export_type == 'in_cell':
-                self._generate_in_cell_export(ws, files_data, separator)
-                logger.debug(f"Сгенерирован экспорт типа 'в ячейку' с разделителем: {separator}")
-            else:
-                logger.error(f"❌ Неизвестный тип экспорта: {export_type}")
-                return None, f"Unknown export type: {export_type}"
-
-            # Настраиваем ширину колонок
-            self._auto_adjust_columns(ws)
-
-            # Сохраняем во временный файл
-            temp_file, temp_filename = self._save_to_temp_file(wb, album_name, article_name)
-
-            filename = f"links_{album_name}{f'_{article_name}' if article_name else ''}.xlsx"
-
-            # Логируем успешное создание файла
-            logger.info(f"✅ Успешно создан XLSX файл: {filename}, временный путь: {temp_filename}")
-
-            # Журналируем действие пользователя
-            try:
-                log_user_action(
-                    action='export_xlsx',
-                    resource_type='album' if not article_name else 'article',
-                    resource_name=album_name if not article_name else f"{album_name}/{article_name}",
-                    details={
-                        'export_type': export_type,
-                        'separator': separator,
-                        'file_count': len(files_data),
-                        'filename': filename,
-                        'album_name': album_name,
-                        'article_name': article_name
-                    }
-                )
-            except Exception as log_error:
-                logger.error(f"❌ Ошибка логирования действия экспорта: {log_error}")
-
-            return temp_filename, filename
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка генерации XLSX экспорта: {e}")
-            # Логируем ошибку в действиях пользователя
-            try:
-                log_user_action(
-                    action='export_xlsx_error',
-                    resource_type='album' if not article_name else 'article',
-                    resource_name=album_name if not article_name else f"{album_name}/{article_name}",
-                    details={
-                        'error': str(e),
-                        'export_type': export_type,
-                        'album_name': album_name,
-                        'article_name': article_name
-                    }
-                )
-            except Exception as log_error:
-                logger.error(f"❌ Ошибка логирования ошибки экспорта: {log_error}")
-
-            return None, f"Failed to create XLSX file: {str(e)}"
-
-    def generate_csv_export(self, album_name, article_name=None, separator=','):
-        """
-        Генерирует CSV документ с ссылками на изображения
-
+        Генерирует CSV документ с ссылками на изображения используя стандартный модуль csv
         Args:
             album_name (str): Название альбома
             article_name (str, optional): Название артикула
-            separator (str): Разделитель полей
-
         Returns:
             tuple: (temp_file_path, filename) или (None, error_message)
         """
@@ -140,14 +41,19 @@ class DocumentGenerator:
             articles_data = self._group_files_by_article(files_data)
 
             # Создаем временный файл
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', encoding='utf-8') as tmp_file:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', encoding='utf-8',
+                                             newline='') as tmp_file:
+                # Используем стандартный модуль csv
+                writer = csv.writer(tmp_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
                 # Записываем заголовок
-                tmp_file.write(f'"Артикул"{separator}"Ссылки"\n')
+                writer.writerow(['Артикул', 'Ссылки'])
 
                 # Записываем данные
                 for article, links in articles_data.items():
+                    # Объединяем ссылки через точку с запятой (стандартный разделитель для множественных значений в ячейке)
                     links_text = '; '.join(links)
-                    tmp_file.write(f'"{article}"{separator}"{links_text}"\n')
+                    writer.writerow([article, links_text])
 
             filename = f"links_{album_name}{f'_{article_name}' if article_name else ''}.csv"
 
@@ -160,7 +66,6 @@ class DocumentGenerator:
                     resource_type='album' if not article_name else 'article',
                     resource_name=album_name if not article_name else f"{album_name}/{article_name}",
                     details={
-                        'separator': separator,
                         'file_count': len(files_data),
                         'articles_count': len(articles_data),
                         'filename': filename,
@@ -192,95 +97,6 @@ class DocumentGenerator:
 
             return None, f"Failed to create CSV file: {str(e)}"
 
-    def generate_file_list_export(self, album_name, article_name=None, export_format='txt'):
-        """
-        Генерирует простой текстовый список файлов
-
-        Args:
-            album_name (str): Название альбома
-            article_name (str, optional): Название артикула
-            export_format (str): Формат экспорта - 'txt' или 'md'
-
-        Returns:
-            tuple: (temp_file_path, filename) или (None, error_message)
-        """
-        try:
-            logger.info(
-                f"🔄 Начало генерации {export_format.upper()} для альбома: {album_name}, артикул: {article_name}")
-
-            files_data = self._get_files_data(album_name, article_name)
-            if not files_data:
-                logger.warning(
-                    f"❌ Не найдены данные для {export_format.upper()} экспорта: альбом={album_name}, артикул={article_name}")
-                return None, "No data found for export"
-
-            logger.info(f"📊 Найдено {len(files_data)} файлов для {export_format.upper()} экспорта")
-
-            extension = 'txt' if export_format == 'txt' else 'md'
-
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=f'.{extension}',
-                                             encoding='utf-8') as tmp_file:
-                if export_format == 'md':
-                    tmp_file.write(f"# Ссылки на изображения - {album_name}\n\n")
-                    if article_name:
-                        tmp_file.write(f"## Артикул: {article_name}\n\n")
-
-                    for file_data in files_data:
-                        tmp_file.write(f"- [{file_data['filename']}]({file_data['public_link']})\n")
-                else:
-                    tmp_file.write(f"Ссылки на изображения - {album_name}\n")
-                    tmp_file.write("=" * 50 + "\n\n")
-                    if article_name:
-                        tmp_file.write(f"Артикул: {article_name}\n\n")
-
-                    for file_data in files_data:
-                        tmp_file.write(f"Файл: {file_data['filename']}\n")
-                        tmp_file.write(f"Ссылка: {file_data['public_link']}\n")
-                        tmp_file.write("-" * 30 + "\n")
-
-            filename = f"links_{album_name}{f'_{article_name}' if article_name else ''}.{extension}"
-
-            logger.info(f"✅ Успешно создан {export_format.upper()} файл: {filename}")
-
-            # Журналируем действие пользователя
-            try:
-                log_user_action(
-                    action=f'export_{export_format}',
-                    resource_type='album' if not article_name else 'article',
-                    resource_name=album_name if not article_name else f"{album_name}/{article_name}",
-                    details={
-                        'export_format': export_format,
-                        'file_count': len(files_data),
-                        'filename': filename,
-                        'album_name': album_name,
-                        'article_name': article_name
-                    }
-                )
-            except Exception as log_error:
-                logger.error(f"❌ Ошибка логирования действия {export_format.upper()} экспорта: {log_error}")
-
-            return tmp_file.name, filename
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка генерации {export_format} экспорта: {e}")
-            # Логируем ошибку
-            try:
-                log_user_action(
-                    action=f'export_{export_format}_error',
-                    resource_type='album' if not article_name else 'article',
-                    resource_name=album_name if not article_name else f"{album_name}/{article_name}",
-                    details={
-                        'error': str(e),
-                        'export_format': export_format,
-                        'album_name': album_name,
-                        'article_name': article_name
-                    }
-                )
-            except Exception as log_error:
-                logger.error(f"❌ Ошибка логирования ошибки {export_format.upper()} экспорта: {log_error}")
-
-            return None, f"Failed to create {export_format} file: {str(e)}"
-
     # Остальные методы класса остаются без изменений...
     def _get_files_data(self, album_name, article_name):
         """Получает данные файлов из базы данных"""
@@ -310,6 +126,7 @@ class DocumentGenerator:
         except Exception as e:
             logger.error(f"❌ Ошибка получения данных из БД: {e}")
             return []
+
 
     def _group_files_by_article(self, files_data):
         """Группирует файлы по артикулам с правильной сортировкой"""
@@ -406,9 +223,6 @@ class DocumentGenerator:
             workbook.save(tmp_file.name)
             return tmp_file, tmp_file.name
 
-
-# Глобальный экземпляр генератора документов
-document_generator = None
 
 
 def init_document_generator(base_url, upload_folder):

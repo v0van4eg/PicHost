@@ -1,6 +1,6 @@
 # auth_system.py
 
-from flask import session, redirect, url_for, request, render_template
+from flask import session, redirect, url_for, request, render_template, current_app
 from functools import wraps
 import base64
 import json
@@ -13,10 +13,63 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+# Система пермишенов
+class Permissions:
+    # Просмотр
+    VIEW_ALBUMS = 'view_albums'
+    VIEW_ARTICLES = 'view_articles'
+    VIEW_FILES = 'view_files'
+
+    # Загрузка
+    UPLOAD_ZIP = 'upload_zip'
+
+    # Управление
+    MANAGE_ALBUMS = 'manage_albums'
+    MANAGE_ARTICLES = 'manage_articles'
+    EXPORT_DATA = 'export_data'
+
+    # Администрирование
+    ACCESS_ADMIN = 'access_admin'
+    VIEW_LOGS = 'view_logs'
+    SYNC_DATABASE = 'sync_database'
+
+
+# Маппинг ролей на пермишены
+ROLE_PERMISSIONS = {
+    'appviewer': [
+        Permissions.VIEW_ALBUMS,
+        Permissions.VIEW_ARTICLES,
+        Permissions.VIEW_FILES,
+        Permissions.EXPORT_DATA
+    ],
+    'appuser': [
+        Permissions.VIEW_ALBUMS,
+        Permissions.VIEW_ARTICLES,
+        Permissions.VIEW_FILES,
+        Permissions.UPLOAD_ZIP,
+        Permissions.EXPORT_DATA
+    ],
+    'appadmin': [
+        Permissions.VIEW_ALBUMS,
+        Permissions.VIEW_ARTICLES,
+        Permissions.VIEW_FILES,
+        Permissions.UPLOAD_ZIP,
+        Permissions.MANAGE_ALBUMS,
+        Permissions.MANAGE_ARTICLES,
+        Permissions.EXPORT_DATA,
+        Permissions.ACCESS_ADMIN,
+        Permissions.VIEW_LOGS,
+        Permissions.SYNC_DATABASE
+    ]
+}
+
+
 class AuthManager:
     def __init__(self, app=None):
         self.oauth = None
         self.app = None
+        self.role_permissions = ROLE_PERMISSIONS
         if app is not None:
             self.init_app(app)
 
@@ -25,11 +78,6 @@ class AuthManager:
         self.app = app
         self.oauth = OAuth(app)
 
-        # Добавляем middleware для проверки таймаута сессии
-        @app.before_request
-        def check_session_timeout():
-            self._check_session_expiry()
-
         # Получение конфигурации из переменных окружения
         client_id = os.getenv('OAUTH_CLIENT_ID')
         client_secret = os.getenv('OAUTH_CLIENT_SECRET')
@@ -37,9 +85,8 @@ class AuthManager:
         scope = os.getenv('OAUTH_SCOPE', 'openid profile email')
         code_challenge_method = os.getenv('OAUTH_CODE_CHALLENGE_METHOD', 'S256')
 
-        # Конфигурация фильтрации ролей
-        self.custom_roles_prefix = os.getenv('CUSTOM_ROLES_PREFIX', 'app')  # Роли начинающиеся с этого префикса
-        self.hide_default_roles = os.getenv('HIDE_DEFAULT_ROLES', 'true').lower() == 'true'
+        # Упрощенная конфигурация ролей
+        self.allowed_roles = ['appadmin', 'appuser', 'appviewer']
 
         # Проверка обязательных параметров
         if not client_id:
@@ -68,91 +115,37 @@ class AuthManager:
             app.logger.error(f"Failed to register OAuth client: {e}")
             raise
 
-    def _check_session_expiry(self):
-        """Проверяет истечение срока действия сессии"""
-        logger.info("Проверка истечения сессии")
-        if 'user' in session:
-            # Помечаем сессию как постоянную и устанавливаем срок действия
-            session.permanent = True
+    def _filter_user_roles(self, all_roles):
+        """Фильтрует роли, оставляя только разрешенные"""
+        user_roles = []
+        for role in all_roles:
+            if role in self.allowed_roles:
+                user_roles.append(role)
 
-            # Инициализируем last_activity если его нет
-            if 'last_activity' not in session:
-                session['last_activity'] = time.time()
-                return
+        self.app.logger.info(f"Role filtering: {len(all_roles)} -> {len(user_roles)} roles")
+        self.app.logger.info(f"User roles: {user_roles}")
+        return user_roles
 
-            # Проверяем, истекла ли сессия
-            last_activity = session['last_activity']
-            logger.info(f"Последняя активность: {last_activity}")
-            timeout_minutes = int(os.environ.get('SESSION_TIMEOUT_MINUTES', 30))
-            timeout_seconds = timeout_minutes * 60
+    def _get_user_permissions(self, user_roles):
+        """Получить все пермишены пользователя на основе ролей"""
+        permissions = set()
+        for role in user_roles:
+            if role in self.role_permissions:
+                permissions.update(self.role_permissions[role])
+        return permissions
 
-            if time.time() - last_activity > timeout_seconds:
-                # Сессия истекла - выполняем logout
-                self._force_logout()
-                return
-
-            # Обновляем время последней активности
-            session['last_activity'] = time.time()
-
-
-    def _force_logout(self):
-        """Принудительный выход пользователя при истечении сессии"""
-        user_info = session.get('user')
-
-        # Логируем автоматический выход по таймауту
-        if user_info:
-            try:
-                from utils import log_user_action
-                log_user_action(
-                    action='auto_logout',
-                    resource_type='user',
-                    resource_name=user_info.get('name', 'unknown'),
-                    details={
-                        'reason': 'session_timeout',
-                        'ip_address': self._get_client_ip()
-                    },
-                    user=user_info
-                )
-            except Exception as log_error:
-                self.app.logger.error(f"Failed to log auto logout: {log_error}")
-
-        # Очищаем сессию
-        session.clear()
-
-        # Добавляем флаг для отображения сообщения на странице hello
-        session['session_expired'] = True
-
-    def _get_client_ip(self):
-        """Получает IP адрес клиента"""
-        try:
-            if request.environ.get('HTTP_X_FORWARDED_FOR'):
-                return request.environ['HTTP_X_FORWARDED_FOR'].split(',')[0]
-            else:
-                return request.environ.get('REMOTE_ADDR', 'Unknown')
-        except:
-            return 'Unknown'
-
-
-    def _filter_custom_roles(self, roles):
-        """Фильтрует роли, оставляя только кастомные"""
-        if not self.hide_default_roles:
-            return roles
-
-        filtered_roles = []
-        for role in roles:
-            # Оставляем только роли с заданным префиксом
-            if role.startswith(self.custom_roles_prefix):
-                filtered_roles.append(role)
-
-        self.app.logger.info(f"Role filtering: {len(roles)} -> {len(filtered_roles)} roles")
-        self.app.logger.info(f"Filtered roles: {filtered_roles}")
-        return filtered_roles
+    def user_has_permission(self, user, permission):
+        """Проверить наличие пермишена у пользователя"""
+        user_roles = user.get('user_roles', [])
+        user_permissions = self._get_user_permissions(user_roles)
+        return permission in user_permissions
 
     def register_routes(self):
         """Регистрация маршрутов аутентификации"""
 
         @self.app.route('/login')
         def login():
+            logger.info("Запуск процесса аутентификации")
             return self._handle_login()
 
         @self.app.route('/auth/callback')
@@ -173,12 +166,8 @@ class AuthManager:
             family_name = user.get('family_name', '').strip()
             full_name = f"{given_name} {family_name}".strip() or user.get('name', 'Не указано')
 
-            # Получаем отфильтрованные роли для отображения
-            display_roles = user.get('display_roles', [])
-            all_roles = user.get('roles', [])
-
-            # Проверяем, есть ли у пользователя роль appadmin
-            is_appadmin = 'appadmin' in all_roles # или display_roles, в зависимости от вашей логики
+            # Получаем роли пользователя для отображения
+            user_roles = user.get('user_roles', [])
 
             # Подготовим словарь с информацией о пользователе для шаблона
             user_info = {
@@ -192,12 +181,12 @@ class AuthManager:
 
             return render_template('profile.html',
                                    user_info=user_info,
-                                   display_roles=display_roles,
-                                   all_roles=all_roles,
-                                   is_appadmin=is_appadmin)
+                                   user_roles=user_roles
+                                   )
 
     def _handle_login(self):
         """Обработка входа"""
+        logger.info("обработчик входа")
         try:
             nonce = secrets.token_urlsafe(16)
             session['nonce'] = nonce
@@ -206,12 +195,7 @@ class AuthManager:
             redirect_uri = url_for('auth_callback', _external=True)
             self.app.logger.info(f"Starting OAuth flow with redirect_uri: {redirect_uri}")
 
-            # Добавляем параметр для принудительной аутентификации
-            return self.keycloak.authorize_redirect(
-                redirect_uri,
-                nonce=nonce,
-                prompt='login'  # Принудительно запрашивает ввод учетных данных
-            )
+            return self.keycloak.authorize_redirect(redirect_uri, nonce=nonce)
         except Exception as e:
             self.app.logger.error(f"Login error: {str(e)}")
             return f'''
@@ -219,7 +203,6 @@ class AuthManager:
             <p>Не удалось инициализировать процесс аутентификации: {str(e)}</p>
             <a href="/">На главную</a>
             ''', 500
-
 
     def _handle_callback(self):
         """Обработка OAuth callback"""
@@ -239,11 +222,8 @@ class AuthManager:
             access_token = token['access_token']
             decoded_token = self._decode_jwt_payload(access_token)
 
-            # Извлекаем роли
-            realm_access = decoded_token.get('realm_access', {})
+            # Извлекаем роли из ресурса (client roles)
             resource_access = decoded_token.get('resource_access', {})
-
-            realm_roles = realm_access.get('roles', [])
             client_roles = []
 
             # Получаем роли клиента
@@ -251,29 +231,26 @@ class AuthManager:
             if client_id in resource_access:
                 client_roles = resource_access[client_id].get('roles', [])
 
-            all_roles = realm_roles + client_roles
+            # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
+            user_roles = self._filter_user_roles(client_roles)
 
-            # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только кастомные
-            display_roles = self._filter_custom_roles(all_roles)
+            # Получаем пермишены пользователя
+            user_permissions = self._get_user_permissions(user_roles)
 
-            # Сохраняем пользователя в сессии
+            # МИНИМАЛЬНЫЕ ДАННЫЕ В СЕССИИ
             session_user_data = {
+                'sub': user_info.get('sub'),
                 'name': user_info.get('preferred_username', user_info.get('email', 'Unknown')),
+                'email': user_info.get('email', ''),
                 'given_name': user_info.get('given_name', ''),
                 'family_name': user_info.get('family_name', ''),
-                'email': user_info.get('email', 'No email'),
-                'sub': user_info.get('sub'),
-                'roles': all_roles,  # Все роли (для проверок)
-                'display_roles': display_roles,  # Только отображаемые роли
-                'realm_roles': realm_roles,
-                'client_roles': client_roles
+                'user_roles': user_roles,  # Только отфильтрованные роли
+                'user_permissions': list(user_permissions)  # Список пермишенов
             }
 
             session['user'] = session_user_data
-            session['access_token'] = token['access_token']
-            session['id_token'] = token.get('id_token')
+            session['id_token'] = token.get('id_token')  # Только для logout
             session.permanent = True
-            session['last_activity'] = time.time()  # Добавляем время активности
 
             # ЛОГИРОВАНИЕ УСПЕШНОГО ВХОДА
             try:
@@ -282,23 +259,18 @@ class AuthManager:
                 self.app.logger.error(f"Failed to log user login: {log_error}")
 
             self.app.logger.info(f"User {user_info.get('preferred_username')} logged in successfully")
-            self.app.logger.info(f"User roles - All: {all_roles}, Display: {display_roles}")
+            self.app.logger.info(f"User roles: {user_roles}")
+            self.app.logger.info(f"User permissions: {user_permissions}")
             return redirect(redirect_to)
 
         except Exception as e:
             self.app.logger.error(f"Auth callback error: {str(e)}")
-            # Добавляем отладочную информацию
-            import traceback
-            self.app.logger.error(f"Traceback: {traceback.format_exc()}")
-
             return f'''
             <h1>Ошибка авторизации</h1>
             <p>{str(e)}</p>
-            <p>Подробности смотрите в логах сервера.</p>
             <a href="/">На главную</a> | 
             <a href="/login">Попробовать снова</a>
             ''', 400
-
 
     def _handle_logout(self):
         """Обработка выхода с переходом на /hello"""
@@ -328,8 +300,6 @@ class AuthManager:
             session.clear()
             # При ошибке тоже редиректим на /hello
             return redirect(url_for('hello'))
-
-
 
     def _decode_jwt_payload(self, token):
         """Декодирует JWT payload без проверки подписи"""
@@ -370,9 +340,6 @@ class AuthManager:
                 # Если нет id_token, используем client_id
                 logout_url += f'&client_id={self.keycloak.client_id}'
 
-            # Добавляем параметр для полного выхода из всех сессий
-            logout_url += '&logout_hint=global'
-
             return logout_url
         except Exception as e:
             self.app.logger.error(f"Error creating logout URL: {e}")
@@ -393,26 +360,22 @@ def login_required(f):
     return decorated_function
 
 
-def role_required(required_roles):
-    """Декоратор для проверки ролей пользователя"""
-
+def permission_required(permission):
+    """Декоратор для проверки конкретного пермишена"""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if not session.get('user'):
                 return redirect(url_for('login', next=request.url))
 
-            user_roles = session['user'].get('roles', [])  # Проверяем по всем ролям
+            user = session['user']
+            auth_manager = current_app.config.get('auth_manager')
 
-            # Проверяем есть ли хотя бы одна из требуемых ролей
-            if not any(role in user_roles for role in required_roles):
-                user_roles_str = ', '.join(user_roles) if user_roles else 'Нет ролей'
-                required_roles_str = ', '.join(required_roles)
+            if not auth_manager or not auth_manager.user_has_permission(user, permission):
                 return f'''
                 <h1>Доступ запрещен</h1>
-                <p>У вас недостаточно прав для доступа к этой странице.</p>
-                <p><strong>Ваши роли:</strong> {user_roles_str}</p>
-                <p><strong>Требуемые роли:</strong> {required_roles_str}</p>
+                <p>У вас недостаточно прав для выполнения этого действия.</p>
+                <p><strong>Требуется право:</strong> {permission}</p>
                 <a href="/">На главную</a>
                 ''', 403
 
@@ -421,11 +384,6 @@ def role_required(required_roles):
         return decorated_function
 
     return decorator
-
-
-def admin_required(f):
-    """Декоратор для проверки прав администратора"""
-    return role_required(['appadmin', 'administrator'])(f)
 
 
 # Утилиты для работы с пользователями
@@ -437,19 +395,13 @@ def get_current_user():
 def user_has_role(role):
     """Проверяет, есть ли у пользователя указанная роль"""
     user = get_current_user()
-    return user and role in user.get('roles', [])  # Проверяем по всем ролям
+    return user and role in user.get('user_roles', [])  # Проверяем по отфильтрованным ролям
 
 
 def get_user_roles():
     """Возвращает роли текущего пользователя"""
     user = get_current_user()
-    return user.get('roles', []) if user else []
-
-
-def get_display_roles():
-    """Возвращает только отображаемые роли текущего пользователя"""
-    user = get_current_user()
-    return user.get('display_roles', []) if user else []
+    return user.get('user_roles', []) if user else []
 
 
 def is_authenticated():
@@ -457,34 +409,38 @@ def is_authenticated():
     return 'user' in session
 
 
-# Контекстные процессоры для шаблонов
-def auth_context_processor():
-    """Добавляет переменные аутентификации в контекст шаблонов"""
-    return {
-        'current_user': get_current_user(),
-        'is_authenticated': is_authenticated(),
-        'user_has_role': user_has_role,
-        'user_roles': get_user_roles(),
-        'display_roles': get_display_roles,  # Добавляем функцию для получения отображаемых ролей
-        'is_app_admin': is_app_admin,
-        'is_app_user': is_app_user
-    }
-
-
 def user_has_any_role(roles):
     """Проверяет, есть ли у пользователя хотя бы одна из указанных ролей"""
     user = get_current_user()
     if not user:
         return False
-    user_roles = user.get('roles', [])
+    user_roles = user.get('user_roles', [])
     return any(role in user_roles for role in roles)
 
+def user_has_permission(permission):
+    """Проверяет, есть ли у пользователя указанный пермишен"""
+    user = get_current_user()
+    if not user:
+        return False
 
-def is_app_admin():
-    """Проверяет, является ли пользователь appadmin"""
-    return user_has_any_role(['appadmin'])
+    user_permissions = user.get('user_permissions', [])
+    return permission in user_permissions
 
 
-def is_app_user():
-    """Проверяет, является ли пользователь appuser"""
-    return user_has_any_role(['appuser', 'appadmin'])
+# Контекстные процессоры для шаблонов
+def auth_context_processor():
+    """Добавляет переменные аутентификации в контекст шаблонов"""
+    user = get_current_user()
+    is_auth = is_authenticated()
+    # Получаем все пермишены пользователя
+    user_permissions = user.get('user_permissions', []) if user else []
+
+    return {
+        'current_user': user,
+        'is_authenticated': is_auth,  # Булево значение
+        'user_has_role': user_has_role,  # Функция
+        'user_roles': get_user_roles(),  # Список ролей
+        'user_permissions': user_permissions,  # Список пермишенов
+        'has_permission': lambda perm: perm in user_permissions,  # Функция проверки пермишена
+        'Permissions': Permissions  # Класс пермишенов для использования в шаблонах
+    }

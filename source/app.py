@@ -1,7 +1,7 @@
 # app.py
 
-from auth_system import AuthManager, login_required, admin_required, role_required, auth_context_processor, \
-    is_authenticated, get_current_user
+from auth_system import AuthManager, login_required, auth_context_processor, \
+    is_authenticated, get_current_user, permission_required, Permissions
 import os
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
 import logging
@@ -13,14 +13,13 @@ import time
 import tempfile
 import atexit
 from werkzeug.middleware.proxy_fix import ProxyFix
-from datetime import timedelta  # Добавьте этот импорт в начало файла
+
 # Модули приложения
 from utils import cleanup_album_thumbnails, log_user_action
 from sync_manager import SyncManager
 from database import db_manager as db_manager
 from zip_processor import ZipProcessor
 from document_generator import init_document_generator, get_document_generator
-
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -29,6 +28,9 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
 auth_manager.init_app(app)
+
+# Сохраняем auth_manager в конфигурации приложения для доступа из декораторов
+app.config['auth_manager'] = auth_manager
 
 # Регистрация маршрутов аутентификации
 auth_manager.register_routes()
@@ -54,7 +56,7 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
-###########  Инициализация модулей  ###############
+# ==========  Инициализация модулей  ===========
 document_generator = init_document_generator(base_url, app.config['UPLOAD_FOLDER'])
 
 zip_processor = ZipProcessor(
@@ -69,7 +71,7 @@ sync_manager = SyncManager(
     base_url=base_url,
     thumbnail_folder=app.config['THUMBNAIL_FOLDER']
 )
-###########  Инициализация модулей конец  ###############
+# =========  Инициализация модулей конец  ==========
 
 
 def generate_image_hash(file_path):
@@ -154,7 +156,6 @@ def cleanup_file_thumbnails(filename):
 
 
 # Инициализация базы данных
-# Инициализация базы данных
 def init_db():
     """Инициализация базы данных при запуске приложения"""
     max_retries = 5
@@ -200,6 +201,7 @@ def get_albums():
     """, fetch=True)
     return [album['album_name'] for album in results] if results else []
 
+
 # Оптимизированное получение артикулов
 def get_articles(album_name):
     # Используем составной индекс idx_files_album_article
@@ -209,6 +211,7 @@ def get_articles(album_name):
         fetch=True
     )
     return [article['article_number'] for article in results] if results else []
+
 
 # Оптимизированное получение файлов
 def get_all_files():
@@ -226,6 +229,7 @@ def get_all_files():
 # Эндпоинт синхронизации БД (обновленный)
 @app.route('/api/sync', methods=['GET'])
 @login_required
+@permission_required(Permissions.SYNC_DATABASE)
 def api_sync():
     try:
         deleted, added = sync_manager.sync()
@@ -242,6 +246,7 @@ def api_sync():
 # Новый эндпоинт для статистики синхронизации
 @app.route('/api/sync/stats', methods=['GET'])
 @login_required
+@permission_required(Permissions.SYNC_DATABASE)
 def api_sync_stats():
     """Возвращает статистику синхронизации"""
     try:
@@ -255,6 +260,7 @@ def api_sync_stats():
 # Статус системы
 @app.route('/api/stats')
 @login_required
+@permission_required(Permissions.VIEW_ALBUMS)
 def api_stats():
     """Возвращает статистику дискового пространства"""
     try:
@@ -286,7 +292,6 @@ def api_stats():
             try:
                 # Используем shutil.disk_usage для получения статистики
                 usage = shutil.disk_usage(mount_point)
-
                 total = usage.total
                 used = usage.used
                 free = usage.free
@@ -358,7 +363,15 @@ def api_stats():
 def index():
     # Используем функцию из контекстного процессора
     if is_authenticated():
-        return render_template('index.html', base_url=base_url)
+        # Определяем какой интерфейс показывать на основе прав
+        user = get_current_user()
+        logger.info(f"User authenticated: {user.get('email', 'Anonymous')}")
+        if user and auth_manager.user_has_permission(user, Permissions.UPLOAD_ZIP):
+            # Пользователь может загружать - показываем полный интерфейс
+            return render_template('index.html', base_url=base_url)
+        else:
+            # Только просмотр - показываем упрощенный интерфейс
+            return render_template('index.html', base_url=base_url)
     else:
         return render_template('hello.html')
 
@@ -371,6 +384,7 @@ def hello():
 # Эндпоинт для принудительной очистки превью альбома
 @app.route('/api/cleanup-thumbnails/<album_name>', methods=['POST'])
 @login_required
+@permission_required(Permissions.MANAGE_ALBUMS)
 def api_cleanup_thumbnails(album_name):
     """Принудительная очистка превью для альбома"""
     try:
@@ -384,6 +398,7 @@ def api_cleanup_thumbnails(album_name):
 # Загрузка ZIP
 @app.route('/upload', methods=['POST'])
 @login_required
+@permission_required(Permissions.UPLOAD_ZIP)
 def upload_zip():
     logger.info("Upload endpoint called")
     if 'zipfile' not in request.files:
@@ -424,6 +439,7 @@ def upload_zip():
 # API: список всех файлов
 @app.route('/api/files')
 @login_required
+@permission_required(Permissions.VIEW_FILES)
 def api_files():
     logger.info("API files endpoint called")
     files = get_all_files()
@@ -433,6 +449,7 @@ def api_files():
 # API: список альбомов
 @app.route('/api/albums')
 @login_required
+@permission_required(Permissions.VIEW_ALBUMS)
 def api_albums():
     logger.info("API albums endpoint called")
     albums = get_albums()
@@ -442,6 +459,7 @@ def api_albums():
 # API: список артикулов для альбома
 @app.route('/api/articles/<album_name>')
 @login_required
+@permission_required(Permissions.VIEW_ARTICLES)
 def api_articles(album_name):
     logger.info(f"API articles endpoint called for album: {album_name}")
     articles = get_articles(album_name)
@@ -452,17 +470,20 @@ def api_articles(album_name):
 @app.route('/api/files/<album_name>')
 @app.route('/api/files/<album_name>/<article_name>')
 @login_required
+@permission_required(Permissions.VIEW_FILES)
 def api_files_filtered(album_name, article_name=None):
     logger.info(f"API files filtered endpoint called for album: {album_name}, article: {article_name}")
     if article_name:
         results = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE album_name = %s AND article_number = %s ORDER BY created_at DESC",
+            "SELECT filename, album_name, article_number, public_link, created_at FROM files \
+                WHERE album_name = %s AND article_number = %s ORDER BY created_at DESC",
             (album_name, article_name),
             fetch=True
         )
     else:
         results = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE album_name = %s ORDER BY created_at DESC",
+            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE \
+                album_name = %s ORDER BY created_at DESC",
             (album_name,),
             fetch=True
         )
@@ -474,6 +495,7 @@ def api_files_filtered(album_name, article_name=None):
 @app.route('/api/thumbnails/<album_name>')
 @app.route('/api/thumbnails/<album_name>/<article_name>')
 @login_required
+@permission_required(Permissions.VIEW_FILES)
 def api_thumbnails(album_name, article_name=None):
     """API для получения информации о файлах с превью"""
     try:
@@ -525,6 +547,7 @@ def api_thumbnails(album_name, article_name=None):
 
 @app.route('/thumbnails/small/<path:filename>')
 @login_required
+@permission_required(Permissions.VIEW_FILES)
 def serve_small_thumbnail(filename):
     """Отдает маленькие превью (120x120)"""
     return serve_thumbnail(filename, app.config['THUMBNAIL_SIZE'])
@@ -532,6 +555,7 @@ def serve_small_thumbnail(filename):
 
 @app.route('/thumbnails/medium/<path:filename>')
 @login_required
+@permission_required(Permissions.VIEW_FILES)
 def serve_medium_thumbnail(filename):
     """Отдает средние превью (400x400)"""
     return serve_thumbnail(filename, app.config['PREVIEW_SIZE'])
@@ -562,6 +586,7 @@ def serve_thumbnail(filename, size):
 
 @app.route('/api/export-xlsx', methods=['POST'])
 @login_required
+@permission_required(Permissions.EXPORT_DATA)
 def api_export_xlsx():
     """Создание XLSX документа с ссылками"""
     logger.info("API export XLSX endpoint called")
@@ -611,8 +636,11 @@ def api_export_xlsx():
 
 ##################################################
 # Добавить новые эндпоинты для других форматов экспорта
+# app.py - обновленный эндпоинт для CSV
+
 @app.route('/api/export-csv', methods=['POST'])
 @login_required
+@permission_required(Permissions.EXPORT_DATA)
 def api_export_csv():
     """Создание CSV документа с ссылками"""
     try:
@@ -622,90 +650,50 @@ def api_export_csv():
 
         album_name = data.get('album_name')
         article_name = data.get('article_name')
-        separator = data.get('separator', ',')
 
         if not album_name:
             return jsonify({'error': 'Album name is required'}), 400
 
+        logger.info(f"🔄 Generating CSV export for album: {album_name}, article: {article_name}")
+
+        # Используем генератор документов
         temp_filename, download_filename = get_document_generator().generate_csv_export(
-            album_name, article_name, separator
+            album_name, article_name
         )
 
         if temp_filename is None:
             return jsonify({'error': download_filename}), 500
 
+        # Логируем успешное создание файла
+        logger.info(f"✅ CSV file created successfully: {download_filename}")
+
         response = send_file(
             temp_filename,
             as_attachment=True,
             download_name=download_filename,
-            mimetype='text/csv'
+            mimetype='text/csv'  # Упрощенный MIME тип для стандартного CSV
         )
 
         @response.call_on_close
         def remove_temp_file():
             try:
                 os.unlink(temp_filename)
+                logger.debug(f"🗑️ Temporary CSV file removed: {temp_filename}")
             except Exception as e:
-                logger.error(f"Error removing temporary CSV file: {e}")
+                logger.error(f"Error removing temporary CSV file {temp_filename}: {e}")
 
         return response
 
     except Exception as e:
-        logger.error(f"Error creating CSV file: {e}")
+        logger.error(f"❌ Error creating CSV file: {e}")
         return jsonify({'error': f'Failed to create CSV file: {str(e)}'}), 500
 
-
-@app.route('/api/export-text', methods=['POST'])
-@login_required
-def api_export_text():
-    """Создание текстового документа со списком файлов"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        album_name = data.get('album_name')
-        article_name = data.get('article_name')
-        export_format = data.get('format', 'txt')  # 'txt' или 'md'
-
-        if not album_name:
-            return jsonify({'error': 'Album name is required'}), 400
-
-        temp_filename, download_filename = get_document_generator().generate_file_list_export(
-            album_name, article_name, export_format
-        )
-
-        if temp_filename is None:
-            return jsonify({'error': download_filename}), 500
-
-        mimetype = 'text/markdown' if export_format == 'md' else 'text/plain'
-
-        response = send_file(
-            temp_filename,
-            as_attachment=True,
-            download_name=download_filename,
-            mimetype=mimetype
-        )
-
-        @response.call_on_close
-        def remove_temp_file():
-            try:
-                os.unlink(temp_filename)
-            except Exception as e:
-                logger.error(f"Error removing temporary text file: {e}")
-
-        return response
-
-    except Exception as e:
-        logger.error(f"Error creating text file: {e}")
-        return jsonify({'error': f'Failed to create text file: {str(e)}'}), 500
-
-    ##################################################
+##################################################
 
 
 @app.route('/api/delete-album/<album_name>', methods=['DELETE'])
 @login_required
-@role_required(['appadmin'])
+@permission_required(Permissions.MANAGE_ALBUMS)
 def api_delete_album(album_name):
     """Удаление альбома из БД и файловой системы"""
     logger.info(f"API delete album endpoint called for: {album_name}")
@@ -753,7 +741,7 @@ def api_delete_album(album_name):
 
 @app.route('/api/delete-article/<album_name>/<article_name>', methods=['DELETE'])
 @login_required
-@role_required(['appadmin'])
+@permission_required(Permissions.MANAGE_ARTICLES)
 def api_delete_article(album_name, article_name):
     """Удаление артикула из БД и файловой системы"""
     logger.info(f"API delete article endpoint called for: {album_name}/{article_name}")
@@ -791,8 +779,6 @@ def api_delete_article(album_name, article_name):
             shutil.rmtree(thumbnail_article_path)
             logger.info(f"Deleted article thumbnails directory: {thumbnail_article_path}")
 
-        # Синхронизируем БД после удаления
-        # sync_manager.sync()
         log_user_action('delete_article', 'article', f"{album_name}/{article_name}",
                         {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
         return jsonify({'message': f'Артикул "{article_name}" в альбоме "{album_name}" успешно удален'})
@@ -805,6 +791,7 @@ def api_delete_article(album_name, article_name):
 # API: количество файлов в альбоме
 @app.route('/api/count/album/<album_name>')
 @login_required
+@permission_required(Permissions.VIEW_ALBUMS)
 def api_count_album(album_name):
     """Возвращает количество файлов в альбоме"""
     logger.info(f"API count album endpoint called for: {album_name}")
@@ -825,6 +812,7 @@ def api_count_album(album_name):
 # API: количество файлов в артикуле
 @app.route('/api/count/article/<album_name>/<article_name>')
 @login_required
+@permission_required(Permissions.VIEW_ARTICLES)
 def api_count_article(album_name, article_name):
     """Возвращает количество файлов в артикуле"""
     logger.info(f"API count article endpoint called for: {album_name}/{article_name}")
@@ -844,7 +832,7 @@ def api_count_article(album_name, article_name):
 
 @app.route('/admin')
 @login_required
-@role_required(['appadmin'])
+@permission_required(Permissions.ACCESS_ADMIN)
 def admin_panel():
     logger.info("Admin panel accessed")
     user = session.get('user', {})
@@ -855,7 +843,7 @@ def admin_panel():
 
 @app.route('/admin/logs')
 @login_required
-@admin_required
+@permission_required(Permissions.VIEW_LOGS)
 def admin_logs():
     """Страница с логами действий пользователей"""
     logger.info("Admin logs accessed")
@@ -930,22 +918,14 @@ def admin_logs():
                            current_user=get_current_user())  # Передаем пользователя в шаблон
 
 
-@app.route('/api/keepalive', methods=['POST'])
-@login_required
-def api_keepalive():
-    """Эндпоинт для поддержания активности сессии"""
-    # Время активности уже обновляется в before_request
-    return jsonify({'status': 'active'})
-
-
-# Инициализация базы данных при запуске приложения
-init_db()
-
 # Функция для закрытия соединений при выходе
 @atexit.register
 def cleanup():
     db_manager.close()
 
+
+# Инициализация базы данных при запуске приложения
+init_db()
 
 # --- Main ---
 if __name__ == '__main__':

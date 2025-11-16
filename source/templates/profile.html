@@ -4,62 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Профиль пользователя</title>
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <style>
-        /* Специфичные стили для profile.html, если необходимо */
-        /* В данном случае, основные стили перенесены в styles.css */
-        .profile-actions {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .profile-actions a {
-            color: #007bff;
-            text-decoration: underline;
-        }
-        .profile-actions a:hover {
-            text-decoration: none;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/profile.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>👤 Профиль пользователя</h1>
+            <a href="/">На главную</a>
         </header>
-        <div class="columns">
-            <div class="column-right">
-                <div class="card">
-                    <div class="card-content">
-                        <div class="user-info">
-                            <p><strong>Логин:</strong> {{ user_info.name or 'Не указано' }}</p>
-                            <p><strong>Имя:</strong> {{ user_info.given_name or '—' }}</p>
-                            <p><strong>Фамилия:</strong> {{ user_info.family_name or '—' }}</p>
-                            <p><strong>Полное имя:</strong> {{ user_info.full_name or 'Не указано' }}</p>
-                            <p><strong>Email:</strong> {{ user_info.email or 'Не указан' }}</p>
-                            <p><strong>ID:</strong> {{ user_info.sub or 'Не указан' }}</p>
-                        </div>
-                        <div class="roles-section">
-                            <h3>📋 Доступные роли ({{ display_roles|length }})</h3>
-                            <div>
-                                {% for role in display_roles %}
-                                    <span class="role-item">{{ role }}</span>
-                                {% else %}
-                                    <p>Нет доступных ролей</p>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        <div class="profile-actions">
-                            <a href="/">← На главную</a>
-                            {% if is_appadmin %}
-                                | <a href="/admin">🛠️ Админ-панель</a> |
-                            {% endif %}
-                            <a href="/logout">🚪 Выйти</a>
-                        </div>
-                    </div>
-                </div>
+
+        <div class="profile-card">
+            <h2>Основная информация</h2>
+            <div class="profile-info">
+                <p><strong>Имя пользователя:</strong> {{ user_info.name }}</p>
+                <p><strong>Имя:</strong> {{ user_info.given_name or 'Не указано' }}</p>
+                <p><strong>Фамилия:</strong> {{ user_info.family_name or 'Не указано' }}</p>
+                <p><strong>Полное имя:</strong> {{ user_info.full_name }}</p>
+                <p><strong>Email:</strong> {{ user_info.email }}</p>
+                <p><strong>ID:</strong> {{ user_info.sub }}</p>
+            </div>
+
+            <h2>Роли в системе</h2>
+            <div class="profile-roles">
+                {% if user_roles %}
+                    <ul>
+                        {% for role in user_roles %}
+                            <li>{{ role }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Нет назначенных ролей</p>
+                {% endif %}
+            </div>
+            <div class="admin-notice">
+                <p>✅ Вы имеете права администратора системы</p>
+                <a href="/admin">Перейти в панель администратора</a>
+            </div>
+            <div class="profile-actions">
+                <a href="/logout" class="btn btn-logout">Выйти</a>
             </div>
         </div>
     </div>

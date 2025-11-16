@@ -1,16 +1,7 @@
 // static/index.js
 
-// --- Инициализация глобальных переменных из data-атрибутов ---
-window.currentUser = {
-    isAppAdmin: document.body.getAttribute('data-user-is-app-admin') === 'true',
-    isAppUser: document.body.getAttribute('data-user-is-app-user') === 'true'
-};
-
-window.is_authenticated = document.body.getAttribute('data-user-is-authenticated') === 'true';
-
-console.log('User initialized:', window.currentUser);
-console.log('Authenticated:', window.is_authenticated);
-
+// --- Инициализация глобальных переменных ---
+console.log('PicHost initialized');
 
 // --- Функция форматирования размера файла ---
 function formatFileSize(bytes) {
@@ -31,12 +22,24 @@ let manageBtn, uploadCard, manageCard, backToUploadBtn;
 let albumSelector, articleSelector;
 // Элементы для XLSX
 let createXlsxBtn, xlsxModal, xlsxTemplateSelect, separatorSelect, generateXlsxBtn, cancelXlsxBtn;
+// Элементы для экспорта CSV
+let createCSVBtn;
 // Элементы для удаления
 let deleteAlbumBtn, deleteArticleBtn;
 // Элемент для оверлея загрузки
 let loadingOverlay;
 // Глобальные переменные для статистики
 let statsInterval = null;
+
+// Переменная для хранения информации о правах пользователя
+let userPermissions = {
+    canUpload: false,
+    canManageAlbums: false,
+    canManageArticles: false,
+    canExport: false,
+    canViewFiles: false,
+    canViewStats: false
+};
 
 // Конфигурация превью
 const PREVIEW_CONFIG = {
@@ -92,6 +95,11 @@ function updateDiskBar(percentUsed) {
 
 // Функция загрузки статистики
 async function loadStats() {
+    // Если пользователь не имеет прав на просмотр статистики, не загружаем
+    if (!userPermissions.canViewStats) {
+        return null;
+    }
+
     try {
         const response = await fetch('/api/stats');
         if (!response.ok) {
@@ -198,27 +206,31 @@ function initStats() {
         return;
     }
 
-    // Показываем карточку статистики
-    statsCard.style.display = 'block';
+    // Показываем карточку статистики только если есть права
+    if (userPermissions.canViewStats) {
+        statsCard.style.display = 'block';
 
-    // Загружаем статистику при инициализации
-    loadStats();
+        // Загружаем статистику при инициализации
+        loadStats();
 
-    // Обработчик для кнопки обновления
-    refreshStatsBtn.addEventListener('click', () => {
-        refreshStatsBtn.disabled = true;
-        refreshStatsBtn.innerHTML = '<span>Загрузка...</span>';
+        // Обработчик для кнопки обновления
+        refreshStatsBtn.addEventListener('click', () => {
+            refreshStatsBtn.disabled = true;
+            refreshStatsBtn.innerHTML = '<span>Загрузка...</span>';
 
-        loadStats().finally(() => {
-            setTimeout(() => {
-                refreshStatsBtn.disabled = false;
-                refreshStatsBtn.innerHTML = '<span>🔄 Обновить</span>';
-            }, 1000);
+            loadStats().finally(() => {
+                setTimeout(() => {
+                    refreshStatsBtn.disabled = false;
+                    refreshStatsBtn.innerHTML = '<span>🔄 Обновить</span>';
+                }, 1000);
+            });
         });
-    });
 
-    // Автоматическое обновление статистики каждые 5 минут
-    statsInterval = setInterval(loadStats, 5 * 60 * 1000);
+        // Автоматическое обновление статистики каждые 5 минут
+        statsInterval = setInterval(loadStats, 5 * 60 * 1000);
+    } else {
+        statsCard.style.display = 'none';
+    }
 }
 
 // Функция для остановки автоматического обновления
@@ -226,6 +238,83 @@ function stopStatsAutoRefresh() {
     if (statsInterval) {
         clearInterval(statsInterval);
         statsInterval = null;
+    }
+}
+
+// --- Инициализация прав пользователя ---
+function initUserPermissions() {
+    const body = document.body;
+
+    userPermissions = {
+        canUpload: body.getAttribute('data-can-upload') === 'true',
+        canManageAlbums: body.getAttribute('data-can-manage-albums') === 'true',
+        canManageArticles: body.getAttribute('data-can-manage-articles') === 'true',
+        canExport: body.getAttribute('data-can-export') === 'true',
+        canViewFiles: body.getAttribute('data-can-view-files') === 'true',
+        canViewStats: body.getAttribute('data-can-view-stats') === 'true'
+    };
+
+    console.log('👤 User permissions:', userPermissions);
+
+    // Визуально обновляем интерфейс на основе прав
+    updateUIForPermissions();
+}
+
+// --- Обновление интерфейса на основе прав ---
+function updateUIForPermissions() {
+    // Управление кнопкой загрузки
+    const uploadBtn = document.getElementById('uploadBtn');
+    if (uploadBtn) {
+        if (!userPermissions.canUpload) {
+            uploadBtn.style.display = 'none';
+        }
+    }
+
+    // Управление карточкой управления
+    const manageBtn = document.getElementById('manageBtn');
+    if (manageBtn) {
+        // Показываем кнопку управления только если есть хотя бы одно из прав
+        const hasAnyManagementPermission = userPermissions.canManageAlbums ||
+                                         userPermissions.canManageArticles ||
+                                         userPermissions.canExport;
+        if (!hasAnyManagementPermission) {
+            manageBtn.style.display = 'none';
+        }
+    }
+
+    // Управление секцией просмотра файлов
+    const linksSection = document.querySelector('.links-section');
+    if (linksSection && !userPermissions.canViewFiles) {
+        linksSection.innerHTML = `
+            <h2>❌ Доступ запрещен</h2>
+            <div class="empty-state" style="color: #e74c3c;">
+                ❌ У вас нет прав для просмотра файлов. Обратитесь к администратору.
+            </div>
+        `;
+    }
+
+    // ОСНОВНОЕ ИЗМЕНЕНИЕ: Если пользователь не может загружать, но может просматривать - показываем управление сразу
+    if (!userPermissions.canUpload && userPermissions.canViewFiles) {
+        console.log('👀 User is viewer-only, showing management interface immediately');
+
+        // Скрываем карточку загрузки и показываем управление
+        if (uploadCard) uploadCard.style.display = 'none';
+        if (manageCard) manageCard.style.display = 'flex';
+        if (backToUploadBtn) backToUploadBtn.style.display = 'none';
+        if (manageBtn) manageBtn.style.display = 'none'; // Скрываем кнопку перехода к управлению
+
+        // Загружаем альбомы сразу
+        setTimeout(() => {
+            loadAlbums().then(albums => {
+                if (albums && albums.length > 0) {
+                    // Автоматически выбираем первый альбом и загружаем его файлы
+                    albumSelector.value = albums[0];
+                    loadArticles(albums[0]).then(() => {
+                        showFilesForAlbum(albums[0]);
+                    });
+                }
+            });
+        }, 100);
     }
 }
 
@@ -305,17 +394,21 @@ function initializeElements() {
     generateXlsxBtn = document.getElementById('generateXlsxBtn');
     cancelXlsxBtn = document.getElementById('cancelXlsxBtn');
 
-    // Элементы для удаления
-    deleteAlbumBtn = document.getElementById('deleteAlbumBtn');
-    deleteArticleBtn = document.getElementById('deleteArticleBtn');
+    // Новые элементы для экспорта CSV
+    createCSVBtn = document.getElementById('createCSVBtn');
 
-    if (!dropArea || !zipFileInput || !browseBtn || !uploadBtn || !uploadForm || !linkList || !currentAlbumTitle ||
-        !manageBtn || !backToUploadBtn || !uploadCard || !manageCard || !progressContainer || !progressBar || !progressText ||
-        !albumSelector || !articleSelector || !createXlsxBtn || !xlsxModal || !xlsxTemplateSelect || !separatorSelect ||
-        !generateXlsxBtn || !cancelXlsxBtn || !loadingOverlay) {
+    // Отладочная информация
+    console.log('🔍 CSV Button element:', createCSVBtn);
+    console.log('🔍 XLSX Button element:', createXlsxBtn);
+
+    // Проверяем только основные элементы
+    if (!dropArea || !zipFileInput || !browseBtn || !uploadForm || !linkList || !currentAlbumTitle || !progressContainer || !progressBar || !progressText || !loadingOverlay) {
         console.error('One or more required DOM elements not found!');
         return false;
     }
+
+    // Инициализируем права пользователя
+    initUserPermissions();
 
     // Инициализация статистики
     initStats();
@@ -342,61 +435,9 @@ function hideLoadingOverlay() {
     }
 }
 
-function updateLoadingProgress(stage, current, total) {
-    if (loadingOverlay) {
-        const detailsElement = loadingOverlay.querySelector('.loading-details');
-        if (detailsElement) {
-            let message = '';
-            switch(stage) {
-                case 'extracting':
-                    message = `Распаковка файлов: ${current}/${total}`;
-                    break;
-                case 'processing':
-                    message = `Обработка изображений: ${current}/${total}`;
-                    break;
-                case 'thumbnails':
-                    message = `Создание превью: ${current}/${total}`;
-                    break;
-                case 'database':
-                    message = `Сохранение в базу данных...`;
-                    break;
-                default:
-                    message = `Обработка: ${current}/${total}`;
-            }
-            detailsElement.textContent = message;
-        }
-    }
-}
-
-function updateLoadingOverlay(stage, message, details) {
-    if (loadingOverlay) {
-        const textElement = loadingOverlay.querySelector('.loading-text');
-        const detailsElement = loadingOverlay.querySelector('.loading-details');
-
-        if (textElement) textElement.textContent = message;
-        if (detailsElement) detailsElement.textContent = details;
-
-        // Меняем цвет спиннера в зависимости от этапа
-        const spinner = loadingOverlay.querySelector('.loading-spinner');
-        if (spinner) {
-            switch(stage) {
-                case 'final':
-                case 'complete':
-                    spinner.style.borderTopColor = '#2ecc71';
-                    break;
-                case 'error':
-                    spinner.style.borderTopColor = '#e74c3c';
-                    break;
-                default:
-                    spinner.style.borderTopColor = '#3498db';
-            }
-        }
-    }
-}
-
 // --- Функция обновления UI ---
 function updateUI() {
-    if (!zipFileInput || !dropArea || !uploadBtn || !manageBtn) {
+    if (!zipFileInput || !dropArea || !uploadBtn) {
         console.error('DOM elements not initialized for updateUI');
         return;
     }
@@ -404,7 +445,9 @@ function updateUI() {
     if (file) {
         const fileSize = formatFileSize(file.size);
         dropArea.innerHTML = `<p>Выбран файл: <strong>${file.name}</strong></p><p>Размер: ${fileSize}</p><p>Готов к загрузке</p>`;
-        uploadBtn.disabled = false;
+        if (userPermissions.canUpload) {
+            uploadBtn.disabled = false;
+        }
     } else {
         dropArea.innerHTML = `<p>Перетащите ZIP-архив сюда</p><p>или</p><button type="button" class="btn" id="browseBtn">Выбрать файл</button>`;
         uploadBtn.disabled = true;
@@ -577,7 +620,11 @@ async function loadArticles(albumName) {
 
 function clearLinkList() {
     if (linkList) {
-        linkList.innerHTML = '<div class="empty-state">Выберите альбом и артикул для просмотра ссылок</div>';
+        if (!userPermissions.canUpload) {
+            linkList.innerHTML = '<div class="empty-state">Выберите альбом для просмотра изображений</div>';
+        } else {
+            linkList.innerHTML = '<div class="empty-state">Загрузите ZIP-архив, чтобы получить прямые ссылки на изображения</div>';
+        }
     }
     if (currentAlbumTitle) {
         currentAlbumTitle.textContent = 'Прямые ссылки на изображения';
@@ -708,6 +755,13 @@ async function showFilesForAlbum(albumName, articleName = '') {
         return;
     }
 
+    if (!userPermissions.canViewFiles) {
+        if (linkList) {
+            linkList.innerHTML = '<div class="empty-state" style="color: #e74c3c;">❌ У вас нет прав для просмотра файлов</div>';
+        }
+        return;
+    }
+
     await updateTitleWithCount(albumName, articleName);
 
     try {
@@ -800,6 +854,11 @@ async function showFilesForAlbum(albumName, articleName = '') {
 
 // --- Функции для удаления ---
 async function deleteAlbum(albumName) {
+    if (!userPermissions.canManageAlbums) {
+        alert('❌ У вас нет прав для удаления альбомов');
+        return;
+    }
+
     if (!albumName || !confirm(`Вы уверены, что хотите удалить альбом "${albumName}"? Это действие нельзя отменить.`)) {
         return;
     }
@@ -827,6 +886,11 @@ async function deleteAlbum(albumName) {
 }
 
 async function deleteArticle(albumName, articleName) {
+    if (!userPermissions.canManageArticles) {
+        alert('❌ У вас нет прав для удаления артикулов');
+        return;
+    }
+
     if (!albumName || !articleName || !confirm(`Вы уверены, что хотите удалить артикул "${articleName}" из альбома "${albumName}"? Это действие нельзя отменить.`)) {
         return;
     }
@@ -876,10 +940,8 @@ function updateDeleteButtonsState() {
 
 // --- Инициализация кнопок удаления ---
 function initDeleteButtons() {
-    const isAppAdmin = window.currentUser && window.currentUser.isAppAdmin;
-
-    if (!isAppAdmin) {
-        return;
+    if (!userPermissions.canManageAlbums && !userPermissions.canManageArticles) {
+        return; // Не создаем кнопки если нет прав
     }
 
     let deleteButtonsContainer = document.getElementById('deleteButtonsContainer');
@@ -899,7 +961,7 @@ function initDeleteButtons() {
         }
     }
 
-    if (!deleteAlbumBtn) {
+    if (!deleteAlbumBtn && userPermissions.canManageAlbums) {
         deleteAlbumBtn = document.createElement('button');
         deleteAlbumBtn.id = 'deleteAlbumBtn';
         deleteAlbumBtn.className = 'btn btn-danger';
@@ -911,7 +973,7 @@ function initDeleteButtons() {
         deleteButtonsContainer.appendChild(deleteAlbumBtn);
     }
 
-    if (!deleteArticleBtn) {
+    if (!deleteArticleBtn && userPermissions.canManageArticles) {
         deleteArticleBtn = document.createElement('button');
         deleteArticleBtn.id = 'deleteArticleBtn';
         deleteArticleBtn.className = 'btn btn-danger';
@@ -958,6 +1020,11 @@ function initXlsxModal() {
 }
 
 function showXlsxModal() {
+    if (!userPermissions.canExport) {
+        alert('❌ У вас нет прав для экспорта данных');
+        return;
+    }
+
     const selectedAlbum = albumSelector.value;
     if (!selectedAlbum) {
         alert('Сначала выберите альбом');
@@ -975,6 +1042,11 @@ function hideXlsxModal() {
 }
 
 async function generateXlsxFile() {
+    if (!userPermissions.canExport) {
+        alert('❌ У вас нет прав для экспорта данных');
+        return;
+    }
+
     const selectedAlbum = albumSelector.value;
     const selectedArticle = articleSelector.value || null;
     const exportType = xlsxTemplateSelect.value;
@@ -1044,18 +1116,108 @@ async function generateXlsxFile() {
     }
 }
 
+
+
+// --- Функции для работы с CSV ---
+async function generateCSVFile() {
+    console.log('🔄 CSV export function called');
+
+    if (!userPermissions.canExport) {
+        alert('❌ У вас нет прав для экспорта данных');
+        return;
+    }
+
+    const selectedAlbum = albumSelector.value;
+    const selectedArticle = articleSelector.value || null;
+
+    console.log('📁 Selected album:', selectedAlbum);
+    console.log('📋 Selected article:', selectedArticle);
+
+    if (!selectedAlbum) {
+        alert('Сначала выберите альбом');
+        return;
+    }
+
+    const generateBtn = createCSVBtn;
+    const originalText = generateBtn.innerHTML;
+
+    try {
+        console.log('🚀 Starting CSV generation request...');
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<span>Создание...</span>';
+
+        const response = await fetch('/api/export-csv', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                album_name: selectedAlbum,
+                article_name: selectedArticle
+                // separator удален - используется жестко закодированный на бэкенде
+            })
+        });
+
+        console.log('📡 Response status:', response.status);
+        console.log('📡 Response ok:', response.ok);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('❌ Server error:', errorData);
+            throw new Error(errorData.error || 'Ошибка при создании файла');
+        }
+
+        const blob = await response.blob();
+        console.log('📄 Blob size:', blob.size);
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+
+        let filename = `links_${selectedAlbum}`;
+        if (selectedArticle) {
+            filename += `_${selectedArticle}`;
+        }
+        filename += '.csv';
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        console.log('✅ CSV file downloaded successfully');
+
+    } catch (error) {
+        console.error('❌ Error generating CSV:', error);
+        alert(`Ошибка при создании файла: ${error.message}`);
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = originalText;
+    }
+}
+
+
+// Добавить эту функцию для обновления состояния кнопки CSV
+function updateCreateCSVButtonState() {
+    if (createCSVBtn) {
+        createCSVBtn.disabled = !albumSelector.value;
+    }
+}
+
 function updateCreateXlsxButtonState() {
     if (createXlsxBtn) {
         createXlsxBtn.disabled = !albumSelector.value;
+    }
+    if (createCSVBtn) {
+        createCSVBtn.disabled = !albumSelector.value;
     }
 }
 
 // --- Инициализация после загрузки DOM ---
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM fully loaded and parsed");
-    if (window.is_authenticated) {
-        setupActivityTracking();
-    }
 
     if (!initializeElements()) {
         console.error('Failed to initialize DOM elements. Cannot proceed.');
@@ -1110,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         await loadArticles(selectedAlbum);
         clearLinkList();
-        updateCreateXlsxButtonState();
+        updateCreateXlsxButtonState(); // Эта функция теперь обновляет обе кнопки
         updateDeleteButtonsState();
 
         if (selectedAlbum) {
@@ -1133,6 +1295,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Обработчик отправки формы ---
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        // ПРЯМАЯ ПРОВЕРКА ПРАВ
+        if (!userPermissions.canUpload) {
+            alert('❌ У вас нет прав для загрузки файлов. Обратитесь к администратору.');
+            return;
+        }
+
         if (!zipFileInput || !uploadBtn) {
              console.error('DOM elements for upload not initialized');
              return;
@@ -1171,8 +1340,8 @@ document.addEventListener('DOMContentLoaded', function() {
         xhr.addEventListener('load', function() {
             progressContainer.style.display = 'none';
             showLoadingOverlay(
-                'Кукареку!',
-                'Кукареку! Получаем ответ от сервера...'
+                'Обработка...',
+                'Получаем ответ от сервера...'
             );
 
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -1182,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         let albumName = data.album_name || file.name.replace(/\.zip$/i, '');
                         currentAlbumName = albumName;
 
-                        updateLoadingOverlay('final', 'Всё готово!', 'Обновляем список файлов...');
+                        showLoadingOverlay('Завершение', 'Всё готово!', 'Обновляем список файлов...');
 
                         setTimeout(() => {
                             showFilesForAlbum(albumName).then(() => {
@@ -1255,6 +1424,15 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Элементы для переключения карточек не найдены');
     }
 
+    // --- Обработчик для кнопки CSV ---
+    // ДОБАВЛЯЕМ ОБРАБОТЧИК ПОСЛЕ ИНИЦИАЛИЗАЦИИ ЭЛЕМЕНТОВ
+    if (createCSVBtn) {
+        console.log("✅ Adding event listener to CSV button");
+        createCSVBtn.addEventListener('click', generateCSVFile);
+    } else {
+        console.error("❌ CSV button not found during initialization");
+    }
+
     // Инициализируем UI
     updateUI();
     clearLinkList();
@@ -1266,27 +1444,3 @@ document.addEventListener('DOMContentLoaded', function() {
     // Добавляем очистку интервала при разгрузке страницы
     window.addEventListener('beforeunload', stopStatsAutoRefresh);
 });
-
-// Функция для обновления активности пользователя
-function updateUserActivity() {
-    // Отправляем запрос для обновления времени активности
-    // Можно использовать lightweight endpoint или просто обращаться к любому API
-    fetch('/api/albums', {
-        method: 'GET',
-        credentials: 'same-origin'
-    }).catch(() => {
-        // Игнорируем ошибки, так как это просто "heartbeat"
-    });
-}
-
-// Обновляем активность при действиях пользователя
-function setupActivityTracking() {
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-
-    events.forEach(event => {
-        document.addEventListener(event, updateUserActivity, { passive: true });
-    });
-
-    // Также обновляем активность периодически (каждые 5 минут)
-    setInterval(updateUserActivity, 5 * 60 * 1000);
-}
