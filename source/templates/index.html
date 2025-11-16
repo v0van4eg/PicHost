@@ -866,7 +866,9 @@
         </header>
         <div class="columns">
             <div class="column-left">
-                <div class="card" id="uploadCard">
+                <!-- Карточка загрузки - показывается только если есть право UPLOAD_ZIP -->
+                <div class="card" id="uploadCard"
+                     {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                     <h2>📤 Загрузите ZIP-архив</h2>
                     <form id="uploadForm" enctype="multipart/form-data"
                           {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
@@ -932,8 +934,10 @@
                     </button>
                 </div>
 
-                <!-- Карточка управления ссылками -->
-                <div id="manageCard" style="display: none;">
+                <!-- Карточка управления ссылками - показывается сразу если нет права UPLOAD_ZIP -->
+                <div id="manageCard"
+                     {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: flex;"
+                     {% else %}style="display: none;"{% endif %}>
                     <h2>Управление ссылками</h2>
                     <div class="manage-card-content">
                         <div class="selector-group">
@@ -964,6 +968,7 @@
                         </div>
                         {% endif %}
                     </div>
+                    <!-- Кнопка "Назад к загрузке" скрыта у пользователей без права UPLOAD_ZIP -->
                     <button class="btnmanage" id="backToUploadBtn"
                         {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                         <span>Назад к загрузке</span>
@@ -983,7 +988,11 @@
                     </h2>
                     <ul id="linkList" class="link-list">
                         {% if has_permission(Permissions.VIEW_FILES) %}
-                            <div class="empty-state">Загрузите ZIP-архив, чтобы получить прямые ссылки на изображения</div>
+                            {% if not has_permission(Permissions.UPLOAD_ZIP) %}
+                                <div class="empty-state">Выберите альбом для просмотра изображений</div>
+                            {% else %}
+                                <div class="empty-state">Загрузите ZIP-архив, чтобы получить прямые ссылки на изображения</div>
+                            {% endif %}
                         {% else %}
                             <div class="empty-state" style="color: #e74c3c;">
                                 ❌ У вас нет прав для просмотра файлов. Обратитесь к администратору.

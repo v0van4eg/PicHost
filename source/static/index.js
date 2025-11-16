@@ -290,6 +290,30 @@ function updateUIForPermissions() {
             </div>
         `;
     }
+
+    // ОСНОВНОЕ ИЗМЕНЕНИЕ: Если пользователь не может загружать, но может просматривать - показываем управление сразу
+    if (!userPermissions.canUpload && userPermissions.canViewFiles) {
+        console.log('👀 User is viewer-only, showing management interface immediately');
+
+        // Скрываем карточку загрузки и показываем управление
+        if (uploadCard) uploadCard.style.display = 'none';
+        if (manageCard) manageCard.style.display = 'flex';
+        if (backToUploadBtn) backToUploadBtn.style.display = 'none';
+        if (manageBtn) manageBtn.style.display = 'none'; // Скрываем кнопку перехода к управлению
+
+        // Загружаем альбомы сразу
+        setTimeout(() => {
+            loadAlbums().then(albums => {
+                if (albums && albums.length > 0) {
+                    // Автоматически выбираем первый альбом и загружаем его файлы
+                    albumSelector.value = albums[0];
+                    loadArticles(albums[0]).then(() => {
+                        showFilesForAlbum(albums[0]);
+                    });
+                }
+            });
+        }, 100);
+    }
 }
 
 // --- Система ленивой загрузки изображений ---
@@ -587,7 +611,11 @@ async function loadArticles(albumName) {
 
 function clearLinkList() {
     if (linkList) {
-        linkList.innerHTML = '<div class="empty-state">Выберите альбом и артикул для просмотра ссылок</div>';
+        if (!userPermissions.canUpload) {
+            linkList.innerHTML = '<div class="empty-state">Выберите альбом для просмотра изображений</div>';
+        } else {
+            linkList.innerHTML = '<div class="empty-state">Загрузите ZIP-архив, чтобы получить прямые ссылки на изображения</div>';
+        }
     }
     if (currentAlbumTitle) {
         currentAlbumTitle.textContent = 'Прямые ссылки на изображения';
@@ -1293,7 +1321,6 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.error('Элементы для переключения карточек не найдены');
     }
-
 
     // Инициализируем UI
     updateUI();
