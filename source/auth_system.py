@@ -234,6 +234,14 @@ class AuthManager:
             # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
             user_roles = self._filter_user_roles(client_roles)
 
+            # НОВАЯ ЛОГИКА: если у пользователя нет ролей, назначаем appviewer по умолчанию
+            has_default_role = False
+            if not user_roles:
+                user_roles = ['appviewer']
+                has_default_role = True
+                self.app.logger.info(
+                    f"User {user_info.get('preferred_username')} has no roles, assigned default role: appviewer")
+
             # Получаем пермишены пользователя
             user_permissions = self._get_user_permissions(user_roles)
 
@@ -245,7 +253,8 @@ class AuthManager:
                 'given_name': user_info.get('given_name', ''),
                 'family_name': user_info.get('family_name', ''),
                 'user_roles': user_roles,  # Только отфильтрованные роли
-                'user_permissions': list(user_permissions)  # Список пермишенов
+                'user_permissions': list(user_permissions),  # Список пермишенов
+                'has_default_role': has_default_role  # Флаг, что роль назначена по умолчанию
             }
 
             session['user'] = session_user_data
@@ -259,7 +268,7 @@ class AuthManager:
                 self.app.logger.error(f"Failed to log user login: {log_error}")
 
             self.app.logger.info(f"User {user_info.get('preferred_username')} logged in successfully")
-            self.app.logger.info(f"User roles: {user_roles}")
+            self.app.logger.info(f"User roles: {user_roles} (default: {has_default_role})")
             self.app.logger.info(f"User permissions: {user_permissions}")
             return redirect(redirect_to)
 
@@ -271,6 +280,7 @@ class AuthManager:
             <a href="/">На главную</a> | 
             <a href="/login">Попробовать снова</a>
             ''', 400
+
 
     def _handle_logout(self):
         """Обработка выхода с переходом на /hello"""
@@ -409,14 +419,6 @@ def is_authenticated():
     return 'user' in session
 
 
-def user_has_any_role(roles):
-    """Проверяет, есть ли у пользователя хотя бы одна из указанных ролей"""
-    user = get_current_user()
-    if not user:
-        return False
-    user_roles = user.get('user_roles', [])
-    return any(role in user_roles for role in roles)
-
 def user_has_permission(permission):
     """Проверяет, есть ли у пользователя указанный пермишен"""
     user = get_current_user()
@@ -432,15 +434,16 @@ def auth_context_processor():
     """Добавляет переменные аутентификации в контекст шаблонов"""
     user = get_current_user()
     is_auth = is_authenticated()
+
     # Получаем все пермишены пользователя
     user_permissions = user.get('user_permissions', []) if user else []
 
     return {
         'current_user': user,
-        'is_authenticated': is_auth,  # Булево значение
-        'user_has_role': user_has_role,  # Функция
-        'user_roles': get_user_roles(),  # Список ролей
-        'user_permissions': user_permissions,  # Список пермишенов
-        'has_permission': lambda perm: perm in user_permissions,  # Функция проверки пермишена
-        'Permissions': Permissions  # Класс пермишенов для использования в шаблонах
+        'is_authenticated': is_auth,
+        'user_has_role': user_has_role,
+        'user_roles': get_user_roles(),
+        'user_permissions': user_permissions,
+        'has_permission': lambda perm: perm in user_permissions,
+        'Permissions': Permissions,
     }
