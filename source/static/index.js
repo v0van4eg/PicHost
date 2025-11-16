@@ -394,8 +394,12 @@ function initializeElements() {
     generateXlsxBtn = document.getElementById('generateXlsxBtn');
     cancelXlsxBtn = document.getElementById('cancelXlsxBtn');
 
-    // Новые элементы для экспорта
+    // Новые элементы для экспорта CSV
     createCSVBtn = document.getElementById('createCSVBtn');
+
+    // Отладочная информация
+    console.log('🔍 CSV Button element:', createCSVBtn);
+    console.log('🔍 XLSX Button element:', createXlsxBtn);
 
     // Проверяем только основные элементы
     if (!dropArea || !zipFileInput || !browseBtn || !uploadForm || !linkList || !currentAlbumTitle || !progressContainer || !progressBar || !progressText || !loadingOverlay) {
@@ -1112,9 +1116,102 @@ async function generateXlsxFile() {
     }
 }
 
+
+
+// --- Функции для работы с CSV ---
+async function generateCSVFile() {
+    console.log('🔄 CSV export function called');
+
+    if (!userPermissions.canExport) {
+        alert('❌ У вас нет прав для экспорта данных');
+        return;
+    }
+
+    const selectedAlbum = albumSelector.value;
+    const selectedArticle = articleSelector.value || null;
+
+    console.log('📁 Selected album:', selectedAlbum);
+    console.log('📋 Selected article:', selectedArticle);
+
+    if (!selectedAlbum) {
+        alert('Сначала выберите альбом');
+        return;
+    }
+
+    const generateBtn = createCSVBtn;
+    const originalText = generateBtn.innerHTML;
+
+    try {
+        console.log('🚀 Starting CSV generation request...');
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<span>Создание...</span>';
+
+        const response = await fetch('/api/export-csv', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                album_name: selectedAlbum,
+                article_name: selectedArticle
+                // separator удален - используется жестко закодированный на бэкенде
+            })
+        });
+
+        console.log('📡 Response status:', response.status);
+        console.log('📡 Response ok:', response.ok);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('❌ Server error:', errorData);
+            throw new Error(errorData.error || 'Ошибка при создании файла');
+        }
+
+        const blob = await response.blob();
+        console.log('📄 Blob size:', blob.size);
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+
+        let filename = `links_${selectedAlbum}`;
+        if (selectedArticle) {
+            filename += `_${selectedArticle}`;
+        }
+        filename += '.csv';
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        console.log('✅ CSV file downloaded successfully');
+
+    } catch (error) {
+        console.error('❌ Error generating CSV:', error);
+        alert(`Ошибка при создании файла: ${error.message}`);
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = originalText;
+    }
+}
+
+
+// Добавить эту функцию для обновления состояния кнопки CSV
+function updateCreateCSVButtonState() {
+    if (createCSVBtn) {
+        createCSVBtn.disabled = !albumSelector.value;
+    }
+}
+
 function updateCreateXlsxButtonState() {
     if (createXlsxBtn) {
         createXlsxBtn.disabled = !albumSelector.value;
+    }
+    if (createCSVBtn) {
+        createCSVBtn.disabled = !albumSelector.value;
     }
 }
 
@@ -1175,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         await loadArticles(selectedAlbum);
         clearLinkList();
-        updateCreateXlsxButtonState();
+        updateCreateXlsxButtonState(); // Эта функция теперь обновляет обе кнопки
         updateDeleteButtonsState();
 
         if (selectedAlbum) {
@@ -1325,6 +1422,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     } else {
         console.error('Элементы для переключения карточек не найдены');
+    }
+
+    // --- Обработчик для кнопки CSV ---
+    // ДОБАВЛЯЕМ ОБРАБОТЧИК ПОСЛЕ ИНИЦИАЛИЗАЦИИ ЭЛЕМЕНТОВ
+    if (createCSVBtn) {
+        console.log("✅ Adding event listener to CSV button");
+        createCSVBtn.addEventListener('click', generateCSVFile);
+    } else {
+        console.error("❌ CSV button not found during initialization");
     }
 
     // Инициализируем UI

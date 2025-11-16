@@ -636,6 +636,8 @@ def api_export_xlsx():
 
 ##################################################
 # Добавить новые эндпоинты для других форматов экспорта
+# app.py - обновленный эндпоинт для CSV
+
 @app.route('/api/export-csv', methods=['POST'])
 @login_required
 @permission_required(Permissions.EXPORT_DATA)
@@ -648,86 +650,45 @@ def api_export_csv():
 
         album_name = data.get('album_name')
         article_name = data.get('article_name')
-        separator = data.get('separator', ',')
 
         if not album_name:
             return jsonify({'error': 'Album name is required'}), 400
 
+        logger.info(f"🔄 Generating CSV export for album: {album_name}, article: {article_name}")
+
+        # Используем генератор документов
         temp_filename, download_filename = get_document_generator().generate_csv_export(
-            album_name, article_name, separator
+            album_name, article_name
         )
 
         if temp_filename is None:
             return jsonify({'error': download_filename}), 500
 
+        # Логируем успешное создание файла
+        logger.info(f"✅ CSV file created successfully: {download_filename}")
+
         response = send_file(
             temp_filename,
             as_attachment=True,
             download_name=download_filename,
-            mimetype='text/csv'
+            mimetype='text/csv'  # Упрощенный MIME тип для стандартного CSV
         )
 
         @response.call_on_close
         def remove_temp_file():
             try:
                 os.unlink(temp_filename)
+                logger.debug(f"🗑️ Temporary CSV file removed: {temp_filename}")
             except Exception as e:
-                logger.error(f"Error removing temporary CSV file: {e}")
+                logger.error(f"Error removing temporary CSV file {temp_filename}: {e}")
 
         return response
 
     except Exception as e:
-        logger.error(f"Error creating CSV file: {e}")
+        logger.error(f"❌ Error creating CSV file: {e}")
         return jsonify({'error': f'Failed to create CSV file: {str(e)}'}), 500
 
-
-@app.route('/api/export-text', methods=['POST'])
-@login_required
-@permission_required(Permissions.EXPORT_DATA)
-def api_export_text():
-    """Создание текстового документа со списком файлов"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        album_name = data.get('album_name')
-        article_name = data.get('article_name')
-        export_format = data.get('format', 'txt')  # 'txt' или 'md'
-
-        if not album_name:
-            return jsonify({'error': 'Album name is required'}), 400
-
-        temp_filename, download_filename = get_document_generator().generate_file_list_export(
-            album_name, article_name, export_format
-        )
-
-        if temp_filename is None:
-            return jsonify({'error': download_filename}), 500
-
-        mimetype = 'text/markdown' if export_format == 'md' else 'text/plain'
-
-        response = send_file(
-            temp_filename,
-            as_attachment=True,
-            download_name=download_filename,
-            mimetype=mimetype
-        )
-
-        @response.call_on_close
-        def remove_temp_file():
-            try:
-                os.unlink(temp_filename)
-            except Exception as e:
-                logger.error(f"Error removing temporary text file: {e}")
-
-        return response
-
-    except Exception as e:
-        logger.error(f"Error creating text file: {e}")
-        return jsonify({'error': f'Failed to create text file: {str(e)}'}), 500
-
-    ##################################################
+##################################################
 
 
 @app.route('/api/delete-album/<album_name>', methods=['DELETE'])
