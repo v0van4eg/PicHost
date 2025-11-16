@@ -10,6 +10,7 @@ import io
 import hashlib
 import shutil
 import time
+from datetime import datetime
 import tempfile
 import atexit
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -24,6 +25,9 @@ from document_generator import init_document_generator, get_document_generator
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Добавить в начало app.py для отслеживания времени запуска
+app.start_time = datetime.now()
 
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
@@ -916,6 +920,101 @@ def admin_logs():
                            date_to=date_to,
                            available_actions=action_list,
                            current_user=get_current_user())  # Передаем пользователя в шаблон
+
+
+# Добавить в app.py новые эндпоинты для админ-панели
+
+@app.route('/api/admin/db-info')
+@login_required
+@permission_required(Permissions.ACCESS_ADMIN)
+def api_admin_db_info():
+    """Возвращает информацию о базе данных"""
+    try:
+        # Размер базы данных
+        db_size = db_manager.execute_query("""
+            SELECT pg_size_pretty(pg_database_size(current_database())) as db_size
+        """, fetch=True)
+
+        # Количество таблиц
+        tables_count = db_manager.execute_query("""
+            SELECT COUNT(*) as count 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """, fetch=True)
+
+        # Активные подключения
+        connections = db_manager.execute_query("""
+            SELECT COUNT(*) as count 
+            FROM pg_stat_activity 
+            WHERE datname = current_database()
+        """, fetch=True)
+
+        # Время работы БД
+        uptime = db_manager.execute_query("""
+            SELECT date_trunc('second', current_timestamp - pg_postmaster_start_time()) as uptime
+        """, fetch=True)
+
+        # Информация о таблицах
+        tables_info = db_manager.execute_query("""
+            SELECT 
+                table_name as name,
+                (SELECT COUNT(*) FROM information_schema.tables t2 WHERE t2.table_schema = 'public') as tables_count,
+                (xpath('/row/cnt/text()', query_to_xml(format('SELECT COUNT(*) as cnt FROM %I', table_name), false, true, '')))[1]::text::int as rows,
+                pg_size_pretty(pg_relation_size(format('%I', table_name))) as size
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """, fetch=True)
+
+        # Общая статистика
+        total_articles = db_manager.execute_query("""
+            SELECT COUNT(DISTINCT article_number) as total_articles FROM files
+        """, fetch=True)
+
+        total_logs = db_manager.execute_query("""
+            SELECT COUNT(*) as total_logs FROM user_actions_log
+        """, fetch=True)
+
+        return jsonify({
+            'database_size': db_size[0]['db_size'] if db_size else 'N/A',
+            'tables_count': tables_count[0]['count'] if tables_count else 0,
+            'active_connections': connections[0]['count'] if connections else 0,
+            'uptime': str(uptime[0]['uptime']) if uptime else 'N/A',
+            'tables': tables_info if tables_info else [],
+            'total_articles': total_articles[0]['total_articles'] if total_articles else 0,
+            'total_logs': total_logs[0]['total_logs'] if total_logs else 0
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting DB info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/system-info')
+@login_required
+@permission_required(Permissions.ACCESS_ADMIN)
+def api_admin_system_info():
+    """Возвращает информацию о системе"""
+    try:
+        import platform
+        import flask
+        from datetime import datetime
+
+        # Время запуска приложения (примерно)
+        start_time = getattr(app, 'start_time', datetime.now())
+        uptime = datetime.now() - start_time
+
+        return jsonify({
+            'python_version': platform.python_version(),
+            'flask_version': flask.__version__,
+            'server_info': f'{platform.system()} {platform.release()}',
+            'uptime': str(uptime).split('.')[0]  # Без микросекунд
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting system info: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 
 # Функция для закрытия соединений при выходе

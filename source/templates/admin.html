@@ -6,209 +6,266 @@
     <title>Админ-панель - PicHost</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles/admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="header-content">
-                <h1>🛠️ Админ-панель</h1>
-                <div class="user-info-header">
-                    <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }}</span>
-                    <div class="header-links">
-                        <a href="{{ url_for('index') }}">← На главную</a>
-                        <a href="{{ url_for('profile') }}">Профиль</a>
-                        <a href="{{ url_for('logout') }}">Выйти</a>
-                    </div>
+    <div class="admin-container">
+        <!-- Боковая панель -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">🖼️</div>
+                    <span class="logo-text">PicHost</span>
                 </div>
+                <div class="admin-badge">Администратор</div>
             </div>
-        </header>
 
-        <div class="columns">
-            <!-- Левая колонка - быстрый доступ -->
-            <div class="column-left">
-                <div class="card quick-actions-card">
-                    <h2>⚡ Быстрые действия</h2>
-                    <div class="quick-actions">
-                        <button class="quick-btn" onclick="syncDatabase()" id="syncBtn">
-                            <span class="btn-icon">🔄</span>
-                            <span class="btn-text">Синхронизировать БД</span>
-                        </button>
-                        
-                        <a href="{{ url_for('admin_logs') }}" class="quick-btn">
-                            <span class="btn-icon">📋</span>
-                            <span class="btn-text">Журнал действий</span>
-                        </a>
-                        
-                        <button class="quick-btn" onclick="showStats()" id="statsBtn">
-                            <span class="btn-icon">📊</span>
-                            <span class="btn-text">Статистика системы</span>
-                        </button>
-                        
-                        <button class="quick-btn" onclick="cleanupThumbnails()" id="cleanupBtn">
-                            <span class="btn-icon">🧹</span>
-                            <span class="btn-text">Очистить превью</span>
-                        </button>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('index') }}" class="nav-item">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-text">На главную</span>
+                </a>
+                <a href="{{ url_for('profile') }}" class="nav-item">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-text">Профиль</span>
+                </a>
+                <div class="nav-section">
+                    <span class="section-label">Администрирование</span>
+                    <a href="{{ url_for('admin_logs') }}" class="nav-item">
+                        <span class="nav-icon">📋</span>
+                        <span class="nav-text">Журнал действий</span>
+                    </a>
+                    <button class="nav-item" onclick="syncDatabase()">
+                        <span class="nav-icon">🔄</span>
+                        <span class="nav-text">Синхронизация БД</span>
+                    </button>
+                    <button class="nav-item" onclick="cleanupThumbnails()">
+                        <span class="nav-icon">🧹</span>
+                        <span class="nav-text">Очистка превью</span>
+                    </button>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="{{ url_for('logout') }}" class="logout-btn">
+                    <span class="nav-icon">🚪</span>
+                    <span class="nav-text">Выйти</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Основное содержимое -->
+        <main class="main-content">
+            <!-- Верхняя панель -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Админ-панель</h1>
+                    <p class="page-subtitle">Управление системой PicHost</p>
+                </div>
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        {{ (current_user.given_name[0] if current_user.given_name else current_user.name[0])|upper }}
+                    </div>
+                    <div class="user-details">
+                        <span class="user-name">{{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }}</span>
+                        <span class="user-role">Администратор</span>
                     </div>
                 </div>
+            </header>
 
-                <!-- Статистика системы -->
-                <div class="card stats-card">
-                    <h2>📈 Статистика</h2>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <span class="stat-label">Файлов в БД:</span>
+            <!-- Карточки статистики -->
+            <section class="stats-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon files-icon">
+                            <span>📄</span>
+                        </div>
+                        <div class="stat-info">
                             <span class="stat-value" id="dbFilesCount">—</span>
+                            <span class="stat-label">Файлов в БД</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Альбомов:</span>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon albums-icon">
+                            <span>📁</span>
+                        </div>
+                        <div class="stat-info">
                             <span class="stat-value" id="albumsCount">—</span>
+                            <span class="stat-label">Альбомов</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Дисковое пространство:</span>
-                            <div class="disk-usage">
-                                <div class="disk-bar">
-                                    <div class="disk-bar-fill" id="adminDiskBar"></div>
-                                </div>
-                                <span class="disk-percent" id="diskPercent">—</span>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon articles-icon">
+                            <span>📝</span>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="articlesCount">—</span>
+                            <span class="stat-label">Артикулов</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon logs-icon">
+                            <span>📊</span>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="logsCount">—</span>
+                            <span class="stat-label">Записей в логах</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Основные разделы -->
+            <div class="content-grid">
+                <!-- Дисковое пространство -->
+                <div class="content-card disk-card">
+                    <div class="card-header">
+                        <h2 class="card-title">💾 Дисковое пространство</h2>
+                        <button class="btn-refresh" onclick="loadAdminStats()">
+                            <span class="btn-icon">🔄</span>
+                        </button>
+                    </div>
+                    <div class="disk-content">
+                        <div class="disk-usage">
+                            <div class="disk-bar">
+                                <div class="disk-bar-fill" id="adminDiskBar"></div>
+                            </div>
+                            <div class="disk-percent" id="diskPercent">—</div>
+                        </div>
+                        <div class="disk-details">
+                            <div class="disk-detail">
+                                <span class="detail-label">Всего:</span>
+                                <span class="detail-value" id="diskTotal">—</span>
+                            </div>
+                            <div class="disk-detail">
+                                <span class="detail-label">Использовано:</span>
+                                <span class="detail-value" id="diskUsed">—</span>
+                            </div>
+                            <div class="disk-detail">
+                                <span class="detail-label">Свободно:</span>
+                                <span class="detail-value" id="diskFree">—</span>
                             </div>
                         </div>
                     </div>
-                    <button class="btn-refresh" onclick="loadAdminStats()">
-                        🔄 Обновить
-                    </button>
                 </div>
-            </div>
 
-            <!-- Правая колонка - основная информация -->
-            <div class="column-right">
-                <div class="card user-info-card">
-                    <h2>👤 Информация о пользователе</h2>
+                <!-- Информация о БД -->
+                <div class="content-card database-card">
+                    <div class="card-header">
+                        <h2 class="card-title">🗃️ База данных</h2>
+                    </div>
+                    <div class="database-info">
+                        <div class="db-stats">
+                            <div class="db-stat">
+                                <span class="db-stat-label">Размер БД:</span>
+                                <span class="db-stat-value" id="dbSize">—</span>
+                            </div>
+                            <div class="db-stat">
+                                <span class="db-stat-label">Таблиц:</span>
+                                <span class="db-stat-value" id="dbTables">—</span>
+                            </div>
+                            <div class="db-stat">
+                                <span class="db-stat-label">Подключения:</span>
+                                <span class="db-stat-value" id="dbConnections">—</span>
+                            </div>
+                            <div class="db-stat">
+                                <span class="db-stat-label">Время работы:</span>
+                                <span class="db-stat-value" id="dbUptime">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Таблицы БД -->
+                <div class="content-card tables-card">
+                    <div class="card-header">
+                        <h2 class="card-title">📋 Таблицы базы данных</h2>
+                    </div>
+                    <div class="tables-list" id="tablesList">
+                        <!-- Таблицы будут загружены через JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Информация о системе -->
+                <div class="content-card system-card">
+                    <div class="card-header">
+                        <h2 class="card-title">💻 Системная информация</h2>
+                        <button class="btn-refresh" onclick="loadSystemInfo()">
+                            <span class="btn-icon">🔄</span>
+                        </button>
+                    </div>
+                    <div class="system-info">
+                        <div class="system-info-item">
+                            <span class="system-info-label">Версия Python:</span>
+                            <span class="system-info-value" id="pythonVersion">—</span>
+                        </div>
+                        <div class="system-info-item">
+                            <span class="system-info-label">Версия Flask:</span>
+                            <span class="system-info-value" id="flaskVersion">—</span>
+                        </div>
+                        <div class="system-info-item">
+                            <span class="system-info-label">Сервер:</span>
+                            <span class="system-info-value" id="serverInfo">—</span>
+                        </div>
+                        <div class="system-info-item">
+                            <span class="system-info-label">Время работы:</span>
+                            <span class="system-info-value" id="appUptime">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Информация о пользователе -->
+                <div class="content-card user-card">
+                    <div class="card-header">
+                        <h2 class="card-title">👤 Информация о пользователе</h2>
+                    </div>
                     <div class="user-details">
-                        <div class="detail-row">
+                        <div class="user-detail">
                             <span class="detail-label">Логин:</span>
                             <span class="detail-value">{{ current_user.name if current_user else 'Аноним' }}</span>
                         </div>
-                        <div class="detail-row">
+                        <div class="user-detail">
                             <span class="detail-label">Полное имя:</span>
                             <span class="detail-value">{{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</span>
                         </div>
-                        <div class="detail-row">
+                        <div class="user-detail">
                             <span class="detail-label">Email:</span>
                             <span class="detail-value">{{ current_user.email if current_user else 'N/A' }}</span>
                         </div>
-                        <div class="detail-row">
+                        <div class="user-detail">
                             <span class="detail-label">ID пользователя:</span>
                             <span class="detail-value id-value">{{ current_user.sub if current_user else 'N/A' }}</span>
                         </div>
                     </div>
                 </div>
-
-                <div class="card roles-card">
-                    <h2>🎭 Роли и права</h2>
-                    <div class="roles-section">
-                        <div class="roles-grid">
-                            <div class="role-group">
-                                <h3>Отображаемые роли:</h3>
-                                <div class="role-tags">
-                                    {% for role in display_roles %}
-                                    <span class="role-tag">{{ role }}</span>
-                                    {% else %}
-                                    <span class="no-roles">Нет ролей</span>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            <div class="role-group">
-                                <h3>Все роли (OIDC):</h3>
-                                <div class="role-tags">
-                                    {% for role in all_roles %}
-                                    <span class="role-tag oidc-role">{{ role }}</span>
-                                    {% else %}
-                                    <span class="no-roles">Нет ролей</span>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card features-card">
-                    <h2>🛠️ Функции администратора</h2>
-                    <div class="features-grid">
-                        <div class="feature-item">
-                            <span class="feature-icon">👥</span>
-                            <div class="feature-content">
-                                <h3>Управление пользователями</h3>
-                                <p>Настройка прав доступа и ролей пользователей</p>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">⚙️</span>
-                            <div class="feature-content">
-                                <h3>Настройки системы</h3>
-                                <p>Конфигурация параметров приложения</p>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">🛡️</span>
-                            <div class="feature-content">
-                                <h3>Безопасность</h3>
-                                <p>Мониторинг и управление безопасностью</p>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">💾</span>
-                            <div class="feature-content">
-                                <h3>Резервное копирование</h3>
-                                <p>Управление резервными копиями данных</p>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">🔄</span>
-                            <div class="feature-content">
-                                <h3>Синхронизация</h3>
-                                <p>Синхронизация БД с файловой системой</p>
-                                <a href="{{ url_for('api_sync') }}" class="feature-link">Перейти →</a>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">📋</span>
-                            <div class="feature-content">
-                                <h3>Журнал действий</h3>
-                                <p>Просмотр логов действий пользователей</p>
-                                <a href="{{ url_for('admin_logs') }}" class="feature-link">Перейти →</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <!-- Оверлей загрузки -->
     <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">Обработка...</div>
-        <div class="loading-details" id="loadingDetails">Пожалуйста, подождите</div>
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Обработка...</div>
+            <div class="loading-details" id="loadingDetails">Пожалуйста, подождите</div>
+        </div>
     </div>
 
     <script>
         // Функции для админ-панели
         async function syncDatabase() {
-            const btn = document.getElementById('syncBtn');
-            const originalText = btn.innerHTML;
-            
             showLoading('Синхронизация БД', 'Синхронизируем базу данных с файловой системой...');
-            
+
             try {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Синхронизация...</span>';
-                
                 const response = await fetch('/api/sync');
                 const data = await response.json();
-                
+
                 if (response.ok) {
-                    showLoading('Успех', 'Синхронизация завершена успешно!');
-                    setTimeout(hideLoading, 2000);
+                    showLoading('Успех', `Синхронизация завершена! Удалено: ${data.deleted}, добавлено: ${data.added}`);
+                    setTimeout(hideLoading, 3000);
                     // Обновляем статистику после синхронизации
                     setTimeout(loadAdminStats, 500);
                 } else {
@@ -216,30 +273,21 @@
                 }
             } catch (error) {
                 alert('Ошибка синхронизации: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                setTimeout(hideLoading, 1000);
+                hideLoading();
             }
-        }
-
-        function showStats() {
-            // Здесь можно добавить модальное окно с детальной статистикой
-            loadAdminStats();
-            alert('Статистика загружена. Проверьте левую панель.');
         }
 
         async function cleanupThumbnails() {
             if (!confirm('Очистить все превью изображений? Это действие нельзя отменить.')) {
                 return;
             }
-            
+
             showLoading('Очистка превью', 'Удаляем миниатюры изображений...');
-            
+
             try {
                 // Здесь можно добавить вызов API для очистки превью
                 // await fetch('/api/cleanup-thumbnails/all', { method: 'POST' });
-                
+
                 setTimeout(() => {
                     hideLoading();
                     alert('Функция очистки превью будет доступна в следующем обновлении');
@@ -254,21 +302,25 @@
             try {
                 const response = await fetch('/api/stats');
                 if (!response.ok) throw new Error('Ошибка загрузки статистики');
-                
+
                 const data = await response.json();
-                
+
                 if (data.error) throw new Error(data.error);
-                
-                // Обновляем статистику
-                document.getElementById('dbFilesCount').textContent = 
+
+                // Обновляем основную статистику
+                document.getElementById('dbFilesCount').textContent =
                     data.files?.total_files?.toLocaleString() || '0';
-                document.getElementById('albumsCount').textContent = 
+                document.getElementById('albumsCount').textContent =
                     data.files?.total_albums?.toLocaleString() || '0';
-                
+                document.getElementById('articlesCount').textContent =
+                    data.db_stats?.total_articles?.toLocaleString() || '—';
+                document.getElementById('logsCount').textContent =
+                    data.db_stats?.total_logs?.toLocaleString() || '—';
+
                 // Обновляем использование диска
                 const diskStats = data.disk_stats;
                 let mainStats = null;
-                
+
                 // Ищем основную статистику диска
                 for (const key in diskStats) {
                     if (diskStats[key]) {
@@ -276,15 +328,15 @@
                         break;
                     }
                 }
-                
+
                 if (mainStats) {
                     const percentUsed = mainStats.percent_used || 0;
                     const diskBar = document.getElementById('adminDiskBar');
                     const diskPercent = document.getElementById('diskPercent');
-                    
+
                     diskBar.style.width = percentUsed + '%';
                     diskPercent.textContent = percentUsed + '%';
-                    
+
                     // Цвет в зависимости от заполненности
                     if (percentUsed > 90) {
                         diskBar.style.background = '#e74c3c';
@@ -293,8 +345,16 @@
                     } else {
                         diskBar.style.background = '#2ecc71';
                     }
+
+                    // Детали диска
+                    document.getElementById('diskTotal').textContent = formatBytes(mainStats.total);
+                    document.getElementById('diskUsed').textContent = formatBytes(mainStats.used);
+                    document.getElementById('diskFree').textContent = formatBytes(mainStats.free);
                 }
-                
+
+                // Загружаем информацию о БД
+                await loadDatabaseInfo();
+
             } catch (error) {
                 console.error('Ошибка загрузки статистики:', error);
                 document.getElementById('dbFilesCount').textContent = '—';
@@ -303,11 +363,77 @@
             }
         }
 
+        async function loadDatabaseInfo() {
+            try {
+                const response = await fetch('/api/admin/db-info');
+                if (!response.ok) throw new Error('Ошибка загрузки информации о БД');
+
+                const data = await response.json();
+
+                if (data.error) throw new Error(data.error);
+
+                // Обновляем информацию о БД
+                document.getElementById('dbSize').textContent = data.database_size || '—';
+                document.getElementById('dbTables').textContent = data.tables_count || '—';
+                document.getElementById('dbConnections').textContent = data.active_connections || '—';
+                document.getElementById('dbUptime').textContent = data.uptime || '—';
+
+                // Обновляем список таблиц
+                if (data.tables) {
+                    const tablesList = document.getElementById('tablesList');
+                    tablesList.innerHTML = '';
+
+                    data.tables.forEach(table => {
+                        const tableElement = document.createElement('div');
+                        tableElement.className = 'table-item';
+                        tableElement.innerHTML = `
+                            <div class="table-header">
+                                <span class="table-name">${table.name}</span>
+                                <span class="table-rows">${table.rows?.toLocaleString() || 0} записей</span>
+                            </div>
+                            <div class="table-size">Размер: ${table.size || '—'}</div>
+                        `;
+                        tablesList.appendChild(tableElement);
+                    });
+                }
+
+            } catch (error) {
+                console.error('Ошибка загрузки информации о БД:', error);
+                document.getElementById('dbSize').textContent = '—';
+                document.getElementById('dbTables').textContent = '—';
+            }
+        }
+
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch('/api/admin/system-info');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('pythonVersion').textContent = data.python_version || '—';
+                    document.getElementById('flaskVersion').textContent = data.flask_version || '—';
+                    document.getElementById('serverInfo').textContent = data.server_info || '—';
+                    document.getElementById('appUptime').textContent = data.uptime || '—';
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки информации о системе:', error);
+            }
+        }
+
+        // Вспомогательная функция для форматирования байтов
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
         function showLoading(title, details) {
             const overlay = document.getElementById('loadingOverlay');
             const text = overlay.querySelector('.loading-text');
             const detailsEl = overlay.querySelector('.loading-details');
-            
+
             text.textContent = title;
             detailsEl.textContent = details;
             overlay.classList.add('show');
@@ -320,7 +446,8 @@
         // Загружаем статистику при загрузке страницы
         document.addEventListener('DOMContentLoaded', function() {
             loadAdminStats();
-            
+            loadSystemInfo();
+
             // Автообновление статистики каждые 2 минуты
             setInterval(loadAdminStats, 2 * 60 * 1000);
         });
