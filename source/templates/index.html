@@ -868,7 +868,8 @@
             <div class="column-left">
                 <div class="card" id="uploadCard">
                     <h2>📤 Загрузите ZIP-архив</h2>
-                    <form id="uploadForm" enctype="multipart/form-data">
+                    <form id="uploadForm" enctype="multipart/form-data"
+                          {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                         <div class="upload-area" id="dropArea">
                             <p>Перетащите ZIP-архив сюда</p>
                             <p>или</p>
@@ -900,7 +901,7 @@
                     <!-- Статистика - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВО SYNC_DATABASE -->
                     {% if has_permission(Permissions.SYNC_DATABASE) %}
                     <div class="stats-card" id="statsCard">
-                        <h3>📊 Статистика системы</h3>
+                        <h3>📊 Статистика хранилища</h3>
                         <div class="stats-content">
                             <div class="stat-item">
                                 <span class="stat-label">Хранилище:</span>
@@ -963,7 +964,8 @@
                         </div>
                         {% endif %}
                     </div>
-                    <button class="btnmanage" id="backToUploadBtn">
+                    <button class="btnmanage" id="backToUploadBtn"
+                        {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                         <span>Назад к загрузке</span>
                     </button>
                 </div>

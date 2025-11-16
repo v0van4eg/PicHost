@@ -39,7 +39,7 @@ class Permissions:
 ROLE_PERMISSIONS = {
     'appviewer': [
         Permissions.VIEW_ALBUMS,
-        # Permissions.VIEW_ARTICLES,
+        Permissions.VIEW_ARTICLES,
         Permissions.VIEW_FILES,
         Permissions.EXPORT_DATA
     ],
