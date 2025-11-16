@@ -134,7 +134,7 @@
                             <p><strong>Логин:</strong> {{ current_user.name if current_user else 'Аноним' }}</p>
                             <p><strong>Имя:</strong> {{ current_user.given_name if current_user.given_name else '—' }}</p>
                             <p><strong>Фамилия:</strong> {{ current_user.family_name if current_user.family_name else '—' }}</p>
-                            <p><strong>Полное имя:</strong> {{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</p>
+<!--                            <p><strong>Полное имя:</strong> {{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</p>-->
                             <p><strong>Email:</strong> {{ current_user.email if current_user else 'N/A' }}</p>
                             <p><strong>ID (sub):</strong> {{ current_user.sub if current_user else 'N/A' }}</p>
                             <!-- Детализированная информация (имя, фамилия) -->

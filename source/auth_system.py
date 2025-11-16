@@ -386,69 +386,6 @@ def permission_required(permission):
     return decorator
 
 
-def any_permission_required(permissions):
-    """Декоратор для проверки любого из пермишенов"""
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if not session.get('user'):
-                return redirect(url_for('login', next=request.url))
-
-            user = session['user']
-            auth_manager = current_app.config.get('auth_manager')
-
-            if auth_manager:
-                for permission in permissions:
-                    if auth_manager.user_has_permission(user, permission):
-                        return f(*args, **kwargs)
-
-            return f'''
-            <h1>Доступ запрещен</h1>
-            <p>У вас недостаточно прав для выполнения этого действия.</p>
-            <p><strong>Требуется одно из прав:</strong> {', '.join(permissions)}</p>
-            <a href="/">На главную</a>
-            ''', 403
-
-        return decorated_function
-
-    return decorator
-
-
-def role_required(required_roles):
-    """Декоратор для проверки ролей пользователя"""
-
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if not session.get('user'):
-                return redirect(url_for('login', next=request.url))
-
-            user_roles = session['user'].get('user_roles', [])  # Проверяем по отфильтрованным ролям
-
-            # Проверяем есть ли хотя бы одна из требуемых ролей
-            if not any(role in user_roles for role in required_roles):
-                user_roles_str = ', '.join(user_roles) if user_roles else 'Нет ролей'
-                required_roles_str = ', '.join(required_roles)
-                return f'''
-                <h1>Доступ запрещен</h1>
-                <p>У вас недостаточно прав для доступа к этой странице.</p>
-                <p><strong>Ваши роли:</strong> {user_roles_str}</p>
-                <p><strong>Требуемые роли:</strong> {required_roles_str}</p>
-                <a href="/">На главную</a>
-                ''', 403
-
-            return f(*args, **kwargs)
-
-        return decorated_function
-
-    return decorator
-
-
-def admin_required(f):
-    """Декоратор для проверки прав администратора"""
-    return role_required(['appadmin'])(f)
-
-
 # Утилиты для работы с пользователями
 def get_current_user():
     """Возвращает текущего пользователя"""

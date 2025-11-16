@@ -21,7 +21,6 @@ from database import db_manager as db_manager
 from zip_processor import ZipProcessor
 from document_generator import init_document_generator, get_document_generator
 
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -57,7 +56,7 @@ logger = logging.getLogger(__name__)
 domain = os.environ.get('DOMAIN', 'pichosting.mooo.com')
 base_url = f"http://{domain}"
 
-###########  Инициализация модулей  ###############
+# ==========  Инициализация модулей  ===========
 document_generator = init_document_generator(base_url, app.config['UPLOAD_FOLDER'])
 
 zip_processor = ZipProcessor(
@@ -72,7 +71,7 @@ sync_manager = SyncManager(
     base_url=base_url,
     thumbnail_folder=app.config['THUMBNAIL_FOLDER']
 )
-###########  Инициализация модулей конец  ###############
+# =========  Инициализация модулей конец  ==========
 
 
 def generate_image_hash(file_path):
@@ -202,6 +201,7 @@ def get_albums():
     """, fetch=True)
     return [album['album_name'] for album in results] if results else []
 
+
 # Оптимизированное получение артикулов
 def get_articles(album_name):
     # Используем составной индекс idx_files_album_article
@@ -211,6 +211,7 @@ def get_articles(album_name):
         fetch=True
     )
     return [article['article_number'] for article in results] if results else []
+
 
 # Оптимизированное получение файлов
 def get_all_files():
@@ -475,13 +476,15 @@ def api_files_filtered(album_name, article_name=None):
     logger.info(f"API files filtered endpoint called for album: {album_name}, article: {article_name}")
     if article_name:
         results = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE album_name = %s AND article_number = %s ORDER BY created_at DESC",
+            "SELECT filename, album_name, article_number, public_link, created_at FROM files \
+                WHERE album_name = %s AND article_number = %s ORDER BY created_at DESC",
             (album_name, article_name),
             fetch=True
         )
     else:
         results = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE album_name = %s ORDER BY created_at DESC",
+            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE \
+                album_name = %s ORDER BY created_at DESC",
             (album_name,),
             fetch=True
         )
@@ -816,8 +819,6 @@ def api_delete_article(album_name, article_name):
             shutil.rmtree(thumbnail_article_path)
             logger.info(f"Deleted article thumbnails directory: {thumbnail_article_path}")
 
-        # Синхронизируем БД после удаления
-        # sync_manager.sync()
         log_user_action('delete_article', 'article', f"{album_name}/{article_name}",
                         {'deleted_files_count': len(filenames) if 'filenames' in locals() else 'unknown'})
         return jsonify({'message': f'Артикул "{article_name}" в альбоме "{album_name}" успешно удален'})
@@ -957,15 +958,14 @@ def admin_logs():
                            current_user=get_current_user())  # Передаем пользователя в шаблон
 
 
-# Инициализация базы данных при запуске приложения
-init_db()
-
-
 # Функция для закрытия соединений при выходе
 @atexit.register
 def cleanup():
     db_manager.close()
 
+
+# Инициализация базы данных при запуске приложения
+init_db()
 
 # --- Main ---
 if __name__ == '__main__':
