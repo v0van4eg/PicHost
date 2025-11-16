@@ -58,10 +58,14 @@
                     {% endif %}
                 </p>
             </div>
+            {% if has_permission(Permissions.ACCESS_ADMIN) %}
             <div class="admin-notice">
                 <p>✅ Вы имеете права администратора системы</p>
                 <a href="/admin">Перейти в панель администратора</a>
             </div>
+            {% else %}
+                        <p>У вас нет прав админа</p>
+            {% endif %}
             <div class="profile-actions">
                 <a href="/logout" class="btn btn-logout">Выйти</a>
             </div>
