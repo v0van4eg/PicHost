@@ -1,3 +1,4 @@
+##################################### static/styles/admin.css #####################################
 * {
     margin: 0;
     padding: 0;
@@ -20,35 +21,68 @@ html, body {
     overflow: hidden;
 }
 
+/* Header */
 header {
-    text-align: center;
     margin-bottom: 10px;
     flex-shrink: 0;
 }
 
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    padding: 15px 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
 h1 {
-    font-size: 2.2rem;
+    font-size: 1.8rem;
     color: #2c3e50;
-    margin-bottom: 8px;
+    margin: 0;
 }
 
-.subtitle {
-    color: #6c757d;
-    font-size: 1.0rem;
+.user-info-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.9rem;
+    color: #495057;
 }
 
+.header-links {
+    display: flex;
+    gap: 12px;
+}
+
+.header-links a {
+    color: #3498db;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.header-links a:hover {
+    background: #e9ecef;
+    text-decoration: underline;
+}
+
+/* Columns */
 .columns {
     display: flex;
-    gap: 24px;
+    gap: 20px;
     flex: 1;
     overflow: hidden;
 }
 
 .column-left {
-    flex: 0 0 25%;
+    flex: 0 0 320px;
     min-width: 0;
     display: flex;
     flex-direction: column;
+    gap: 20px;
     overflow: hidden;
 }
 
@@ -57,70 +91,356 @@ h1 {
     min-width: 0;
     display: flex;
     flex-direction: column;
+    gap: 20px;
     overflow: hidden;
 }
 
+/* Cards */
 .card {
     background: #f8f9fa;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    padding: 24px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    flex: 1;
     overflow: hidden;
 }
 
-.card-content {
-    overflow-y: auto;
+.card h2 {
+    font-size: 1.2rem;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.quick-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: inherit;
+}
+
+.quick-btn:hover {
+    background: #3498db;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.btn-icon {
+    font-size: 1.2rem;
+    width: 24px;
+    text-align: center;
+}
+
+.btn-text {
     flex: 1;
-    padding: 10px;
+    font-weight: 500;
 }
 
-.user-info {
-    background: #e2e8f0;
-    padding: 20px;
-    border-radius: 8px;
-    margin: 10px 0;
+/* User Info */
+.user-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.roles-section {
-    background: #e2e8f0;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 10px 0;
-}
-
-.role-item {
-    padding: 5px 10px;
-    margin: 2px;
-    background: #cbd5e0;
-    border-radius: 4px;
-    display: inline-block;
-    font-size: 0.9em;
-}
-
-.admin-features ul {
-    list-style-type: none;
-    padding: 0;
-}
-
-.admin-features li {
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 8px 0;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid #e9ecef;
 }
 
-.admin-features li:last-child {
+.detail-row:last-child {
     border-bottom: none;
 }
 
-.back-link {
-    display: inline-block;
-    margin-top: 20px;
-    color: #007bff;
+.detail-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.detail-value {
+    color: #2c3e50;
+}
+
+.id-value {
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Roles */
+.roles-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.role-group h3 {
+    font-size: 1rem;
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+.role-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.role-tag {
+    background: #3498db;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.oidc-role {
+    background: #95a5a6;
+}
+
+.no-roles {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Features Grid */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.feature-item {
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e1e5e9;
+    transition: all 0.2s ease;
+}
+
+.feature-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.feature-icon {
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.feature-content h3 {
+    font-size: 1rem;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.feature-content p {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.feature-link {
+    color: #3498db;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.feature-link:hover {
     text-decoration: underline;
 }
 
-.back-link:hover {
-    color: #0056b3;
+/* Stats */
+.stats-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.disk-usage {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.disk-bar {
+    flex: 1;
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.disk-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    width: 0%;
+}
+
+.disk-percent {
+    font-size: 0.8rem;
+    color: #6c757d;
+    min-width: 40px;
+    text-align: right;
+}
+
+.btn-refresh {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    transition: background 0.2s;
+    width: 100%;
+}
+
+.btn-refresh:hover {
+    background: #5a6268;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 30px;
+    min-width: 280px;
+    max-width: 350px;
+    border: 1px solid #e1e5e9;
+}
+
+.loading-spinner {
+    width: 45px;
+    height: 45px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 18px;
+}
+
+.loading-text {
+    font-size: 1rem;
+    color: #333;
+    text-align: center;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.loading-details {
+    font-size: 0.8rem;
+    color: #666;
+    text-align: center;
+    line-height: 1.4;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.loading-overlay.show {
+    display: flex;
+    animation: fadeInScale 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .columns {
+        flex-direction: column;
+    }
+    
+    .column-left {
+        flex: 0 0 auto;
+        max-height: 300px;
+    }
+    
+    .roles-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .user-info-header {
+        flex-direction: column;
+        gap: 8px;
+    }
 }

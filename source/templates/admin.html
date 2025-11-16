@@ -3,166 +3,327 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Админ-панель</title>
+    <title>Админ-панель - PicHost</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <style>
-        {% raw %}
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        html, body {
-            height: 100%;
-            background: #e9ecef;
-            color: #333;
-            padding: 10px;
-            overflow: hidden; /* Скрыли прокрутку body */
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 20px); /* Занимает всю высоту окна минус отступы */
-            overflow: hidden; /* Предотвращает прокрутку контейнера */
-        }
-        header {
-            text-align: center;
-            margin-bottom: 10px;
-            flex-shrink: 0; /* Не сжимается */
-        }
-        h1 {
-            font-size: 2.2rem;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-        .subtitle {
-            color: #6c757d;
-            font-size: 1.0rem;
-        }
-        .columns {
-            display: flex;
-            gap: 24px;
-            flex: 1; /* Занимает оставшееся место */
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонок */
-        }
-        .column-left {
-            flex: 0 0 25%; /* Ширина 25% */
-            min-width: 0; /* Позволяет колонке сжиматься */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
-        }
-        .column-right {
-            flex: 1; /* Оставшаяся ширина */
-            min-width: 0; /* Позволяет колонке сжиматься */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden; /* Предотвращает прокрутку контейнера колонки */
-        }
-        .card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            flex: 1; /* Растягивается на доступное пространство */
-            overflow: hidden; /* Предотвращает прокрутку внутри карточки */
-        }
-        .card-content {
-            overflow-y: auto; /* Добавляет прокрутку к содержимому карточки, если оно не помещается */
-            flex: 1; /* Позволяет содержимому заполнять доступное пространство */
-            padding: 10px; /* Добавим внутренний отступ для удобства */
-        }
-        .user-info {
-            background: #e2e8f0; /* Светло-серый фон */
-            padding: 20px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        .roles-section {
-            background: #e2e8f0; /* Светло-серый фон */
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        .role-item {
-            padding: 5px 10px;
-            margin: 2px;
-            background: #cbd5e0; /* Более темный серый для бейджа роли */
-            border-radius: 4px;
-            display: inline-block;
-            font-size: 0.9em;
-        }
-        .admin-features ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        .admin-features li {
-            padding: 8px 0;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .admin-features li:last-child {
-            border-bottom: none;
-        }
-        .back-link {
-            display: inline-block;
-            margin-top: 20px;
-            color: #007bff;
-            text-decoration: underline;
-        }
-        .back-link:hover {
-            color: #0056b3;
-        }
-        {% endraw %}
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/admin.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🛠️ Админ-панель</h1>
+            <div class="header-content">
+                <h1>🛠️ Админ-панель</h1>
+                <div class="user-info-header">
+                    <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }}</span>
+                    <div class="header-links">
+                        <a href="{{ url_for('index') }}">← На главную</a>
+                        <a href="{{ url_for('profile') }}">Профиль</a>
+                        <a href="{{ url_for('logout') }}">Выйти</a>
+                    </div>
+                </div>
+            </div>
         </header>
+
         <div class="columns">
-            <!-- Скрыли левую колонку -->
-            <div class="column-right">
-                <div class="card">
-                    <div class="card-content">
-                        <div class="user-info">
-                            <h2>Информация о пользователе</h2>
-                            <!-- Основная информация -->
-                            <p><strong>Логин:</strong> {{ current_user.name if current_user else 'Аноним' }}</p>
-                            <p><strong>Имя:</strong> {{ current_user.given_name if current_user.given_name else '—' }}</p>
-                            <p><strong>Фамилия:</strong> {{ current_user.family_name if current_user.family_name else '—' }}</p>
-                            <p><strong>Полное имя:</strong> {{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</p>
-                            <p><strong>Email:</strong> {{ current_user.email if current_user else 'N/A' }}</p>
-                            <p><strong>ID (sub):</strong> {{ current_user.sub if current_user else 'N/A' }}</p>
-                            <!-- Детализированная информация (имя, фамилия) -->
-                            <div style="margin-top: 10px; padding: 10px; background: #f1f3f5; border-radius: 6px;">
-                                <p><strong>Отображаемые роли:</strong> {{ display_roles | join(', ') if display_roles else 'Нет ролей' }}</p>
-                                <p><strong>Все роли (OIDC):</strong> {{ all_roles | join(', ') if all_roles else 'Нет ролей' }}</p>
+            <!-- Левая колонка - быстрый доступ -->
+            <div class="column-left">
+                <div class="card quick-actions-card">
+                    <h2>⚡ Быстрые действия</h2>
+                    <div class="quick-actions">
+                        <button class="quick-btn" onclick="syncDatabase()" id="syncBtn">
+                            <span class="btn-icon">🔄</span>
+                            <span class="btn-text">Синхронизировать БД</span>
+                        </button>
+                        
+                        <a href="{{ url_for('admin_logs') }}" class="quick-btn">
+                            <span class="btn-icon">📋</span>
+                            <span class="btn-text">Журнал действий</span>
+                        </a>
+                        
+                        <button class="quick-btn" onclick="showStats()" id="statsBtn">
+                            <span class="btn-icon">📊</span>
+                            <span class="btn-text">Статистика системы</span>
+                        </button>
+                        
+                        <button class="quick-btn" onclick="cleanupThumbnails()" id="cleanupBtn">
+                            <span class="btn-icon">🧹</span>
+                            <span class="btn-text">Очистить превью</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Статистика системы -->
+                <div class="card stats-card">
+                    <h2>📈 Статистика</h2>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Файлов в БД:</span>
+                            <span class="stat-value" id="dbFilesCount">—</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Альбомов:</span>
+                            <span class="stat-value" id="albumsCount">—</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Дисковое пространство:</span>
+                            <div class="disk-usage">
+                                <div class="disk-bar">
+                                    <div class="disk-bar-fill" id="adminDiskBar"></div>
+                                </div>
+                                <span class="disk-percent" id="diskPercent">—</span>
                             </div>
                         </div>
+                    </div>
+                    <button class="btn-refresh" onclick="loadAdminStats()">
+                        🔄 Обновить
+                    </button>
+                </div>
+            </div>
 
-                        <div class="admin-features">
-                            <h3>Доступные функции администратора:</h3>
-                            <ul>
-                                <li>✅ Управление пользователями</li>
-                                <li>✅ Настройки системы</li>
-                                <li>✅ Управление ролями</li>
-                                <li>✅ Мониторинг безопасности</li>
-                                <li>✅ Резервное копирование</li>
-                                <!-- Новая ссылка -->
-                                <li>📲 <a href="{{ url_for('api_sync') }}">Синхронизировать БД с ФС</a></li>
-                                <li>📋 <a href="{{ url_for('admin_logs') }}">Просмотреть журнал действий</a></li>
-                            </ul>
+            <!-- Правая колонка - основная информация -->
+            <div class="column-right">
+                <div class="card user-info-card">
+                    <h2>👤 Информация о пользователе</h2>
+                    <div class="user-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Логин:</span>
+                            <span class="detail-value">{{ current_user.name if current_user else 'Аноним' }}</span>
                         </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Полное имя:</span>
+                            <span class="detail-value">{{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Email:</span>
+                            <span class="detail-value">{{ current_user.email if current_user else 'N/A' }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">ID пользователя:</span>
+                            <span class="detail-value id-value">{{ current_user.sub if current_user else 'N/A' }}</span>
+                        </div>
+                    </div>
+                </div>
 
-                        <a href="{{ url_for('index') }}" class="back-link">← Вернуться на главную</a>
+                <div class="card roles-card">
+                    <h2>🎭 Роли и права</h2>
+                    <div class="roles-section">
+                        <div class="roles-grid">
+                            <div class="role-group">
+                                <h3>Отображаемые роли:</h3>
+                                <div class="role-tags">
+                                    {% for role in display_roles %}
+                                    <span class="role-tag">{{ role }}</span>
+                                    {% else %}
+                                    <span class="no-roles">Нет ролей</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="role-group">
+                                <h3>Все роли (OIDC):</h3>
+                                <div class="role-tags">
+                                    {% for role in all_roles %}
+                                    <span class="role-tag oidc-role">{{ role }}</span>
+                                    {% else %}
+                                    <span class="no-roles">Нет ролей</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card features-card">
+                    <h2>🛠️ Функции администратора</h2>
+                    <div class="features-grid">
+                        <div class="feature-item">
+                            <span class="feature-icon">👥</span>
+                            <div class="feature-content">
+                                <h3>Управление пользователями</h3>
+                                <p>Настройка прав доступа и ролей пользователей</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">⚙️</span>
+                            <div class="feature-content">
+                                <h3>Настройки системы</h3>
+                                <p>Конфигурация параметров приложения</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🛡️</span>
+                            <div class="feature-content">
+                                <h3>Безопасность</h3>
+                                <p>Мониторинг и управление безопасностью</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">💾</span>
+                            <div class="feature-content">
+                                <h3>Резервное копирование</h3>
+                                <p>Управление резервными копиями данных</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🔄</span>
+                            <div class="feature-content">
+                                <h3>Синхронизация</h3>
+                                <p>Синхронизация БД с файловой системой</p>
+                                <a href="{{ url_for('api_sync') }}" class="feature-link">Перейти →</a>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">📋</span>
+                            <div class="feature-content">
+                                <h3>Журнал действий</h3>
+                                <p>Просмотр логов действий пользователей</p>
+                                <a href="{{ url_for('admin_logs') }}" class="feature-link">Перейти →</a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Оверлей загрузки -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Обработка...</div>
+        <div class="loading-details" id="loadingDetails">Пожалуйста, подождите</div>
+    </div>
+
+    <script>
+        // Функции для админ-панели
+        async function syncDatabase() {
+            const btn = document.getElementById('syncBtn');
+            const originalText = btn.innerHTML;
+            
+            showLoading('Синхронизация БД', 'Синхронизируем базу данных с файловой системой...');
+            
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Синхронизация...</span>';
+                
+                const response = await fetch('/api/sync');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showLoading('Успех', 'Синхронизация завершена успешно!');
+                    setTimeout(hideLoading, 2000);
+                    // Обновляем статистику после синхронизации
+                    setTimeout(loadAdminStats, 500);
+                } else {
+                    throw new Error(data.error || 'Ошибка синхронизации');
+                }
+            } catch (error) {
+                alert('Ошибка синхронизации: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                setTimeout(hideLoading, 1000);
+            }
+        }
+
+        function showStats() {
+            // Здесь можно добавить модальное окно с детальной статистикой
+            loadAdminStats();
+            alert('Статистика загружена. Проверьте левую панель.');
+        }
+
+        async function cleanupThumbnails() {
+            if (!confirm('Очистить все превью изображений? Это действие нельзя отменить.')) {
+                return;
+            }
+            
+            showLoading('Очистка превью', 'Удаляем миниатюры изображений...');
+            
+            try {
+                // Здесь можно добавить вызов API для очистки превью
+                // await fetch('/api/cleanup-thumbnails/all', { method: 'POST' });
+                
+                setTimeout(() => {
+                    hideLoading();
+                    alert('Функция очистки превью будет доступна в следующем обновлении');
+                }, 1000);
+            } catch (error) {
+                hideLoading();
+                alert('Ошибка: ' + error.message);
+            }
+        }
+
+        async function loadAdminStats() {
+            try {
+                const response = await fetch('/api/stats');
+                if (!response.ok) throw new Error('Ошибка загрузки статистики');
+                
+                const data = await response.json();
+                
+                if (data.error) throw new Error(data.error);
+                
+                // Обновляем статистику
+                document.getElementById('dbFilesCount').textContent = 
+                    data.files?.total_files?.toLocaleString() || '0';
+                document.getElementById('albumsCount').textContent = 
+                    data.files?.total_albums?.toLocaleString() || '0';
+                
+                // Обновляем использование диска
+                const diskStats = data.disk_stats;
+                let mainStats = null;
+                
+                // Ищем основную статистику диска
+                for (const key in diskStats) {
+                    if (diskStats[key]) {
+                        mainStats = diskStats[key];
+                        break;
+                    }
+                }
+                
+                if (mainStats) {
+                    const percentUsed = mainStats.percent_used || 0;
+                    const diskBar = document.getElementById('adminDiskBar');
+                    const diskPercent = document.getElementById('diskPercent');
+                    
+                    diskBar.style.width = percentUsed + '%';
+                    diskPercent.textContent = percentUsed + '%';
+                    
+                    // Цвет в зависимости от заполненности
+                    if (percentUsed > 90) {
+                        diskBar.style.background = '#e74c3c';
+                    } else if (percentUsed > 70) {
+                        diskBar.style.background = '#f39c12';
+                    } else {
+                        diskBar.style.background = '#2ecc71';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Ошибка загрузки статистики:', error);
+                document.getElementById('dbFilesCount').textContent = '—';
+                document.getElementById('albumsCount').textContent = '—';
+                document.getElementById('diskPercent').textContent = '—';
+            }
+        }
+
+        function showLoading(title, details) {
+            const overlay = document.getElementById('loadingOverlay');
+            const text = overlay.querySelector('.loading-text');
+            const detailsEl = overlay.querySelector('.loading-details');
+            
+            text.textContent = title;
+            detailsEl.textContent = details;
+            overlay.classList.add('show');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        // Загружаем статистику при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAdminStats();
+            
+            // Автообновление статистики каждые 2 минуты
+            setInterval(loadAdminStats, 2 * 60 * 1000);
+        });
+    </script>
 </body>
 </html>
