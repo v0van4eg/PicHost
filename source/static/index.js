@@ -22,6 +22,8 @@ let manageBtn, uploadCard, manageCard, backToUploadBtn;
 let albumSelector, articleSelector;
 // Элементы для XLSX
 let createXlsxBtn, xlsxModal, xlsxTemplateSelect, separatorSelect, generateXlsxBtn, cancelXlsxBtn;
+// Элементы для экспорта CSV
+let createCSVBtn;
 // Элементы для удаления
 let deleteAlbumBtn, deleteArticleBtn;
 // Элемент для оверлея загрузки
@@ -391,6 +393,9 @@ function initializeElements() {
     separatorSelect = document.getElementById('separatorSelect');
     generateXlsxBtn = document.getElementById('generateXlsxBtn');
     cancelXlsxBtn = document.getElementById('cancelXlsxBtn');
+
+    // Новые элементы для экспорта
+    createCSVBtn = document.getElementById('createCSVBtn');
 
     // Проверяем только основные элементы
     if (!dropArea || !zipFileInput || !browseBtn || !uploadForm || !linkList || !currentAlbumTitle || !progressContainer || !progressBar || !progressText || !loadingOverlay) {

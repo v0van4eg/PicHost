@@ -292,7 +292,6 @@ def api_stats():
             try:
                 # Используем shutil.disk_usage для получения статистики
                 usage = shutil.disk_usage(mount_point)
-
                 total = usage.total
                 used = usage.used
                 free = usage.free
