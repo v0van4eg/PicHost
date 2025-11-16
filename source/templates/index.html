@@ -19,10 +19,22 @@
                 <h2>📁 PicHost — Хостинг изображений</h2>
             </div>
             <div style="position: absolute; right: 20px; background: #f8f9fa; padding: 6px 12px; border-radius: 6px; border: 1px solid #dee2e6; font-size: 0.85rem;">
+<!--                <div class="user-info">-->
+<!--                    {% if current_user %}-->
+<!--                        <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }} | </span>-->
+<!--                        <a href="/profile">Профиль</a>-->
+<!--                        <a href="/logout">Выйти</a>-->
+<!--                    {% else %}-->
+<!--                        <a href="/login">🔐 Войти</a>-->
+<!--                    {% endif %}-->
+<!--                </div>-->
                 <div class="user-info">
                     {% if current_user %}
-                        <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }} | </span>
-                        <a href="/profile">Профиль</a>
+                        <span>👤 {{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }}</span>
+                        {% if is_appviewer_by_default %}
+                            <span title="Роль назначена автоматически" style="color: #e67e22; margin-left: 5px;">⚡</span>
+                        {% endif %}
+                        | <a href="/profile">Профиль</a>
                         <a href="/logout">Выйти</a>
                     {% else %}
                         <a href="/login">🔐 Войти</a>

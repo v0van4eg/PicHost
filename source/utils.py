@@ -109,12 +109,11 @@ def get_client_info():
 
 # utils.py - исправленные функции логирования
 
+# utils.py - обновить log_user_login
+
 def log_user_login(user_info, login_method='oauth'):
     """
     Специальная функция для логирования успешного входа пользователя
-
-    :param user_info: dict - Информация о пользователе
-    :param login_method: str - Метод входа ('oauth', 'form', etc.)
     """
     user_id = user_info.get('sub')
     username = user_info.get('preferred_username', user_info.get('email', 'unknown_user'))
@@ -129,7 +128,9 @@ def log_user_login(user_info, login_method='oauth'):
         'ip_address': get_client_info().get('ip_address', 'Unknown'),
         'email': user_info.get('email', ''),
         'given_name': given_name,
-        'family_name': family_name
+        'family_name': family_name,
+        'has_default_role': user_info.get('has_default_role', False),
+        'user_roles': user_info.get('user_roles', [])
     }
 
     log_user_action(
@@ -261,3 +262,4 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
             f"Logged action '{action}' for user '{display_name}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
     except Exception as e:
         logger.error(f"Failed to log action '{action}' for user '{display_name}': {e}")
+
