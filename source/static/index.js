@@ -1361,29 +1361,38 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                         }, 1000);
 
+                        // ОЧИСТКА ФОРМЫ И СБРОС СОСТОЯНИЯ
                         zipFileInput.value = '';
                         droppedFile = null;
-                        updateUI();
+                        updateUI(); // Это вызовет сброс кнопки к неактивному состоянию
 
                         loadAlbums();
                     } else {
                         console.error('Upload failed:', data.error);
                         hideLoadingOverlay();
                         alert(`Ошибка загрузки: ${data.error}`);
+                        // В случае ошибки тоже сбрасываем состояние
+                        uploadBtn.disabled = false;
+                        uploadBtn.innerHTML = '<span>Загрузить архив</span>';
                     }
                 } catch (error) {
                     console.error('JSON parse failed:', error);
                     hideLoadingOverlay();
                     alert('Ошибка: получен некорректный ответ от сервера.');
+                    // В случае ошибки тоже сбрасываем состояние
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<span>Загрузить архив</span>';
                 }
             } else {
                 console.error('Upload failed with status:', xhr.status);
                 hideLoadingOverlay();
                 alert(`Ошибка загрузки: HTTP ${xhr.status}`);
+                // В случае ошибки тоже сбрасываем состояние
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<span>Загрузить архив</span>';
             }
 
-            uploadBtn.disabled = false;
-            uploadBtn.innerHTML = '<span>Загрузить архив</span>';
+            // УДАЛЕНО: повторный сброс состояния кнопки здесь, так как он уже выполняется в updateUI()
         });
 
         xhr.addEventListener('error', function() {
@@ -1398,6 +1407,7 @@ document.addEventListener('DOMContentLoaded', function() {
         xhr.open('POST', '/upload');
         xhr.send(formData);
     });
+
 
     // --- Обработчик для кнопки "Управление ссылками" ---
     if (manageBtn && uploadCard && manageCard) {

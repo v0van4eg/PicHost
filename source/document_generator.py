@@ -26,10 +26,6 @@ class DocumentGenerator:
         self.header_font = header_font
         self.header_fill = header_fill
 
-    # --- Остальные методы класса (_apply_header_styles, _group_files_by_article, _get_files_data,
-    # _generate_in_row_export, _generate_in_cell_export, _auto_adjust_columns, _save_to_temp_file) ---
-    # остаются без изменений, предполагается, что они корректно реализованы в оригинальном файле.
-
     def generate_xlsx_export(self, album_name, article_name=None, export_type='in_row', separator=', '):
         """Генерирует XLSX документ с ссылками на изображения
         Args:
@@ -140,8 +136,15 @@ class DocumentGenerator:
 
             logger.info(f"📊 Найдено {len(files_data)} файлов для CSV экспорта")
 
-            # Группируем по артикулам
+            # Группируем по артикулам и определяем максимальное количество ссылок
             articles_data = self._group_files_by_article(files_data)
+
+            if not articles_data:
+                logger.warning(f"❌ Не удалось сгруппировать данные для CSV экспорта")
+                return None, "No data found for export"
+
+            # Определяем максимальное количество ссылок
+            max_links = max(len(links) for links in articles_data.values())
 
             # Создаем временный файл
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', encoding='utf-8',
@@ -152,17 +155,16 @@ class DocumentGenerator:
 
                 # Записываем заголовок с BOM для корректного отображения кириллицы в Excel
                 tmp_file.write('\ufeff')
-                writer.writerow(['Артикул', 'Ссылки на изображения'])
+
+                # Создаем шапку как в XLSX "в строку" - артикул + нумерованные ссылки
+                headers = ['Артикул'] + [f'Ссылка {i + 1}' for i in range(max_links)]
+                writer.writerow(headers)
 
                 # Записываем данные
                 for article, links in articles_data.items():
-                    if links:
-                        # Объединяем ссылки через точку с запятой и заключаем в кавычки
-                        links_text = '; '.join(links)
-                        # Если в артикуле есть запятые или другие специальные символы - экранируем
-                        writer.writerow([article, links_text])
-                    else:
-                        writer.writerow([article, ''])
+                    # Создаем строку с артикулом и ссылками
+                    row = [article] + links + [''] * (max_links - len(links))
+                    writer.writerow(row)
 
             filename = f"links_{album_name}{f'_{article_name}' if article_name else ''}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
@@ -205,7 +207,6 @@ class DocumentGenerator:
                 logger.error(f"❌ Ошибка логирования ошибки CSV экспорта: {log_error}")
 
             return None, f"Failed to create CSV file: {str(e)}"
-
 
     # Остальные методы класса остаются без изменений...
     def _get_files_data(self, album_name, article_name):
