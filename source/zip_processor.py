@@ -25,6 +25,7 @@ class ZipProcessor:
         self.path_cache = {}
         self.batch_size = 100  # Увеличили размер батча
 
+
     def process_zip(self, zip_path, original_zip_name=None):
         """
         Основной метод обработки ZIP
@@ -45,36 +46,43 @@ class ZipProcessor:
 
             # Анализируем структуру папок
             folder_structure = {}
+            root_files = []
+
             for file_path in all_files:
                 parts = file_path.split('/')
 
+                # Убираем пустые части пути
+                parts = [p for p in parts if p]
+
                 # Если файл в корне архива
                 if len(parts) == 1:
-                    return "root_album", "Файлы в корне архива"
+                    root_files.append(file_path)
+                    continue
 
                 # Первая папка - это потенциальный альбом
                 album_name = parts[0]
                 if album_name not in folder_structure:
                     folder_structure[album_name] = set()
 
-                # Вторая папка - это артикул (если есть)
+                # Если есть вторая папка - это артикул
                 if len(parts) >= 3:
                     article_name = parts[1]
                     folder_structure[album_name].add(article_name)
 
-            # Если есть только одна папка верхнего уровня - используем ее как альбом
-            if len(folder_structure) == 1:
+            # Если есть только одна папка верхнего уровня и нет файлов в корне - используем ее как альбом
+            if len(folder_structure) == 1 and not root_files:
                 album_name = list(folder_structure.keys())[0]
                 # Проверяем, что это не служебная папка
                 if not self._is_system_folder(album_name):
                     return safe_folder_name(album_name), None
 
-            # Если не удалось определить из структуры
-            return None, "Несколько папок верхнего уровня или сложная структура"
+            # Если файлы в корне или несколько папок верхнего уровня
+            return None, "Файлы в корне архива или сложная структура"
 
         except Exception as e:
             logger.error(f"Error analyzing ZIP structure: {e}")
             return None, str(e)
+
 
     def _is_system_folder(self, folder_name):
         """
@@ -92,6 +100,7 @@ class ZipProcessor:
 
         if album_name and album_name != "root_album":
             logger.info(f"🎯 Используем имя альбома из структуры: {album_name}")
+            # Если определили из структуры, используем безопасное имя
             return safe_folder_name(album_name)
 
         # Если не удалось определить из структуры, используем оригинальное имя ZIP
@@ -105,6 +114,7 @@ class ZipProcessor:
         zip_name_without_ext = os.path.splitext(zip_basename)[0]
         logger.warning(f"⚠️ Используем временное имя как альбом: {zip_name_without_ext}")
         return safe_folder_name(zip_name_without_ext)
+
 
     def _validate_zip_structure(self, zip_ref):
         """
@@ -196,6 +206,7 @@ class ZipProcessor:
                 processing_time = time.time() - start_time
                 logger.info(
                     f"✅ ZIP обработан за {processing_time:.2f}s: {len(files_to_insert)} файлов в альбоме '{album_name}'")
+
 
                 return db_success, album_name
 
@@ -290,25 +301,32 @@ class ZipProcessor:
             filename = os.path.basename(relative_path)
 
             # Определяем артикул из структуры пути
+            article_number = None
+
             if file_dir and file_dir != '.':
-                # Путь: album_name/article_number/filename
+                # Путь: temp_extract/album_name/article_number/filename
+                # ИЛИ: album_name/article_number/filename
                 path_parts = file_dir.split(os.sep)
+
+                # Если путь содержит больше 1 части, значит есть вложенные папки
                 if len(path_parts) >= 2:
-                    # Вторая часть пути - это артикул
-                    article_number = safe_folder_name(path_parts[1])
-                else:
-                    article_number = safe_folder_name(os.path.splitext(filename)[0])
+                    # Последняя часть пути - это артикул
+                    article_number = safe_folder_name(path_parts[-1])
 
-                # Обеспечиваем правильную структуру папок
-                normalized_dir = os.path.join(self.upload_folder, album_name, article_number)
-                normalized_path = os.path.join(normalized_dir, filename)
+                    # Нормализуем путь: перемещаем файл из временной структуры в финальную
+                    normalized_dir = os.path.join(self.upload_folder, album_name, article_number)
+                    normalized_path = os.path.join(normalized_dir, filename)
 
-                if file_path != normalized_path:
+                    # Создаем целевую директорию и перемещаем файл
                     os.makedirs(normalized_dir, exist_ok=True)
-                    shutil.move(file_path, normalized_path)
-                    relative_path = os.path.relpath(normalized_path, self.upload_folder)
+                    if file_path != normalized_path:
+                        shutil.move(file_path, normalized_path)
+                        relative_path = os.path.relpath(normalized_path, self.upload_folder)
+                else:
+                    # Файл находится прямо в папке альбома (без артикула)
+                    article_number = safe_folder_name(os.path.splitext(filename)[0])
             else:
-                # Файл в корне альбома
+                # Файл в корне временной папки извлечения
                 article_number = safe_folder_name(os.path.splitext(filename)[0])
 
             # Создаем публичную ссылку
@@ -324,6 +342,7 @@ class ZipProcessor:
         except Exception as e:
             logger.error(f"Ошибка обработки файла {file_path}: {e}")
             return None
+
 
     def _batch_db_insert_fast(self, album_name, files_to_insert):
         """Ультра-быстрая вставка с использованием UNNEST"""
