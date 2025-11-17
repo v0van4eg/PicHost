@@ -3,6 +3,8 @@
 import tempfile
 import logging
 import csv
+# --- ИСПРАВЛЕНО: Добавлен импорт Workbook ---
+from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from database import db_manager
@@ -17,6 +19,108 @@ class DocumentGenerator:
     def __init__(self, base_url, upload_folder):
         self.base_url = base_url
         self.upload_folder = upload_folder
+        # --- Используем константы для стилей ---
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        self.header_font = header_font
+        self.header_fill = header_fill
+
+    # --- Остальные методы класса (_apply_header_styles, _group_files_by_article, _get_files_data,
+    # _generate_in_row_export, _generate_in_cell_export, _auto_adjust_columns, _save_to_temp_file) ---
+    # остаются без изменений, предполагается, что они корректно реализованы в оригинальном файле.
+
+    def generate_xlsx_export(self, album_name, article_name=None, export_type='in_row', separator=', '):
+        """Генерирует XLSX документ с ссылками на изображения
+        Args:
+            album_name (str): Название альбома
+            article_name (str, optional): Название артикула. Если None - все артикулы альбома
+            export_type (str): Тип экспорта - 'in_row' (в строку) или 'in_cell' (в ячейку)
+            separator (str): Разделитель для варианта "в ячейку"
+        Returns:
+            tuple: (temp_file_path, filename) или (None, error_message)
+        """
+        try:
+            logger.info(
+                f"🔄 Начало генерации XLSX для альбома: {album_name}, артикул: {article_name}, тип: {export_type}")
+
+            # Получаем данные из БД
+            files_data = self._get_files_data(album_name, article_name)
+            if not files_data:
+                logger.warning(f"❌ Не найдены данные для экспорта: альбом={album_name}, артикул={article_name}")
+                return None, "No data found for export"
+
+            logger.info(f"📊 Найдено {len(files_data)} файлов для экспорта")
+
+            # --- ИСПРАВЛЕНО: Workbook теперь доступен ---
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Ссылки на изображения"
+
+            # Применяем стили
+            self._apply_header_styles(ws)
+
+            # Генерируем содержимое в зависимости от типа экспорта
+            if export_type == 'in_row':
+                self._generate_in_row_export(ws, files_data)
+                logger.debug("Сгенерирован экспорт типа 'в строку'")
+            elif export_type == 'in_cell':
+                self._generate_in_cell_export(ws, files_data, separator)
+                logger.debug(f"Сгенерирован экспорт типа 'в ячейку' с разделителем: {repr(separator)}")
+            else:
+                logger.error(f"❌ Неизвестный тип экспорта: {export_type}")
+                return None, f"Unknown export type: {export_type}"
+
+            # Настраиваем ширину колонок
+            self._auto_adjust_columns(ws)
+
+            # Сохраняем во временный файл
+            temp_file, temp_filename = self._save_to_temp_file(wb, album_name, article_name)
+            filename = f"links_{album_name}{f'_{article_name}' if article_name else ''}.xlsx"
+
+            # Логируем успешное создание файла
+            logger.info(f"✅ Успешно создан XLSX файл: {filename}, временный путь: {temp_filename}")
+
+            # Журналируем действие пользователя
+            try:
+                log_user_action(
+                    action='export_xlsx',
+                    resource_type='album' if not article_name else 'article',
+                    resource_name=album_name if not article_name else f"{album_name}/{article_name}",
+                    details={
+                        'export_type': export_type,
+                        'separator': separator,
+                        'file_count': len(files_data),
+                        'filename': filename,
+                        'album_name': album_name,
+                        'article_name': article_name
+                    }
+                )
+            except Exception as log_error:
+                logger.error(f"❌ Ошибка логирования действия экспорта: {log_error}")
+
+            return temp_filename, filename
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка генерации XLSX экспорта: {e}")
+            # Логируем ошибку в действиях пользователя
+            try:
+                log_user_action(
+                    action='export_xlsx_error',
+                    resource_type='album' if not article_name else 'article',
+                    resource_name=album_name if not article_name else f"{album_name}/{article_name}",
+                    details={
+                        'error': str(e),
+                        'export_type': export_type,
+                        'album_name': album_name,
+                        'article_name': article_name
+                    }
+                )
+            except Exception as log_error:
+                logger.error(f"❌ Ошибка логирования ошибки экспорта: {log_error}")
+
+            return None, f"Failed to create XLSX file: {str(e)}"
+
+
 
     def generate_csv_export(self, album_name, article_name=None):
         """
@@ -127,7 +231,6 @@ class DocumentGenerator:
             logger.error(f"❌ Ошибка получения данных из БД: {e}")
             return []
 
-
     def _group_files_by_article(self, files_data):
         """Группирует файлы по артикулам с правильной сортировкой"""
 
@@ -222,7 +325,6 @@ class DocumentGenerator:
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
             workbook.save(tmp_file.name)
             return tmp_file, tmp_file.name
-
 
 
 def init_document_generator(base_url, upload_folder):
