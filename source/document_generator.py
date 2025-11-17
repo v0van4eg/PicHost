@@ -8,7 +8,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from database import db_manager
-from utils import log_user_action  # Добавляем импорт
+from utils import log_user_action
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +121,6 @@ class DocumentGenerator:
 
             return None, f"Failed to create XLSX file: {str(e)}"
 
-
-
     def generate_csv_export(self, album_name, article_name=None):
         """
         Генерирует CSV документ с ссылками на изображения используя стандартный модуль csv
@@ -147,21 +146,27 @@ class DocumentGenerator:
             # Создаем временный файл
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', encoding='utf-8',
                                              newline='') as tmp_file:
-                # Используем стандартный модуль csv
-                writer = csv.writer(tmp_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                # Используем стандартный модуль csv с правильными настройками
+                writer = csv.writer(tmp_file, delimiter=',', quotechar='"',
+                                    quoting=csv.QUOTE_MINIMAL, escapechar='\\')
 
-                # Записываем заголовок
-                writer.writerow(['Артикул', 'Ссылки'])
+                # Записываем заголовок с BOM для корректного отображения кириллицы в Excel
+                tmp_file.write('\ufeff')
+                writer.writerow(['Артикул', 'Ссылки на изображения'])
 
                 # Записываем данные
                 for article, links in articles_data.items():
-                    # Объединяем ссылки через точку с запятой (стандартный разделитель для множественных значений в ячейке)
-                    links_text = '; '.join(links)
-                    writer.writerow([article, links_text])
+                    if links:
+                        # Объединяем ссылки через точку с запятой и заключаем в кавычки
+                        links_text = '; '.join(links)
+                        # Если в артикуле есть запятые или другие специальные символы - экранируем
+                        writer.writerow([article, links_text])
+                    else:
+                        writer.writerow([article, ''])
 
-            filename = f"links_{album_name}{f'_{article_name}' if article_name else ''}.csv"
+            filename = f"links_{album_name}{f'_{article_name}' if article_name else ''}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
-            logger.info(f"✅ Успешно создан CSV файл: {filename}")
+            logger.info(f"✅ Успешно создан CSV файл: {filename} с {len(articles_data)} записями")
 
             # Журналируем действие пользователя
             try:
@@ -200,6 +205,7 @@ class DocumentGenerator:
                 logger.error(f"❌ Ошибка логирования ошибки CSV экспорта: {log_error}")
 
             return None, f"Failed to create CSV file: {str(e)}"
+
 
     # Остальные методы класса остаются без изменений...
     def _get_files_data(self, album_name, article_name):
