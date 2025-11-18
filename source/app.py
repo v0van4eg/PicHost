@@ -1,26 +1,27 @@
 # app.py
 
-from auth_system import AuthManager, login_required, auth_context_processor, \
-    is_authenticated, get_current_user, permission_required, Permissions
-import os
-from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
-import logging
-from PIL import Image
-import io
+import atexit
 import hashlib
+import io
+import logging
+import os
 import shutil
+import tempfile
 import time
 from datetime import datetime
-import tempfile
-import atexit
+
+from PIL import Image
+from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from auth_system import AuthManager, permission_required, auth_context_processor, \
+    is_authenticated, get_current_user, Permissions
+from database import db_manager as db_manager
+from document_generator import init_document_generator, get_document_generator
+from sync_manager import SyncManager
 # Модули приложения
 from utils import cleanup_album_thumbnails, log_user_action
-from sync_manager import SyncManager
-from database import db_manager as db_manager
 from zip_processor import ZipProcessor
-from document_generator import init_document_generator, get_document_generator
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -75,6 +76,8 @@ sync_manager = SyncManager(
     base_url=base_url,
     thumbnail_folder=app.config['THUMBNAIL_FOLDER']
 )
+
+
 # =========  Инициализация модулей конец  ==========
 
 
@@ -232,7 +235,6 @@ def get_all_files():
 
 # Эндпоинт синхронизации БД (обновленный)
 @app.route('/api/sync', methods=['GET'])
-@login_required
 @permission_required(Permissions.SYNC_DATABASE)
 def api_sync():
     try:
@@ -249,7 +251,6 @@ def api_sync():
 
 # Новый эндпоинт для статистики синхронизации
 @app.route('/api/sync/stats', methods=['GET'])
-@login_required
 @permission_required(Permissions.SYNC_DATABASE)
 def api_sync_stats():
     """Возвращает статистику синхронизации"""
@@ -263,7 +264,6 @@ def api_sync_stats():
 
 # Статус системы
 @app.route('/api/stats')
-@login_required
 @permission_required(Permissions.VIEW_ALBUMS)
 def api_stats():
     """Возвращает статистику дискового пространства"""
@@ -387,7 +387,6 @@ def hello():
 
 # Эндпоинт для принудительной очистки превью альбома
 @app.route('/api/cleanup-thumbnails/<album_name>', methods=['POST'])
-@login_required
 @permission_required(Permissions.MANAGE_ALBUMS)
 def api_cleanup_thumbnails(album_name):
     """Принудительная очистка превью для альбома"""
@@ -401,7 +400,6 @@ def api_cleanup_thumbnails(album_name):
 
 # Загрузка ZIP
 @app.route('/upload', methods=['POST'])
-@login_required
 @permission_required(Permissions.UPLOAD_ZIP)
 def upload_zip():
     logger.info("Upload endpoint called")
@@ -442,7 +440,6 @@ def upload_zip():
 
 # API: список всех файлов
 @app.route('/api/files')
-@login_required
 @permission_required(Permissions.VIEW_FILES)
 def api_files():
     logger.info("API files endpoint called")
@@ -452,7 +449,6 @@ def api_files():
 
 # API: список альбомов
 @app.route('/api/albums')
-@login_required
 @permission_required(Permissions.VIEW_ALBUMS)
 def api_albums():
     logger.info("API albums endpoint called")
@@ -462,7 +458,6 @@ def api_albums():
 
 # API: список артикулов для альбома
 @app.route('/api/articles/<album_name>')
-@login_required
 @permission_required(Permissions.VIEW_ARTICLES)
 def api_articles(album_name):
     logger.info(f"API articles endpoint called for album: {album_name}")
@@ -473,7 +468,6 @@ def api_articles(album_name):
 # API: получение файлов для конкретного альбома (и опционально артикула)
 @app.route('/api/files/<album_name>')
 @app.route('/api/files/<album_name>/<article_name>')
-@login_required
 @permission_required(Permissions.VIEW_FILES)
 def api_files_filtered(album_name, article_name=None):
     logger.info(f"API files filtered endpoint called for album: {album_name}, article: {article_name}")
@@ -498,7 +492,6 @@ def api_files_filtered(album_name, article_name=None):
 # Новые эндпоинты для превью
 @app.route('/api/thumbnails/<album_name>')
 @app.route('/api/thumbnails/<album_name>/<article_name>')
-@login_required
 @permission_required(Permissions.VIEW_FILES)
 def api_thumbnails(album_name, article_name=None):
     """API для получения информации о файлах с превью"""
@@ -550,7 +543,6 @@ def api_thumbnails(album_name, article_name=None):
 
 
 @app.route('/thumbnails/small/<path:filename>')
-@login_required
 @permission_required(Permissions.VIEW_FILES)
 def serve_small_thumbnail(filename):
     """Отдает маленькие превью (120x120)"""
@@ -558,7 +550,6 @@ def serve_small_thumbnail(filename):
 
 
 @app.route('/thumbnails/medium/<path:filename>')
-@login_required
 @permission_required(Permissions.VIEW_FILES)
 def serve_medium_thumbnail(filename):
     """Отдает средние превью (400x400)"""
@@ -589,7 +580,6 @@ def serve_thumbnail(filename, size):
 
 
 @app.route('/api/export-xlsx', methods=['POST'])
-@login_required
 @permission_required(Permissions.EXPORT_DATA)
 def api_export_xlsx():
     """Создание XLSX документа с ссылками"""
@@ -638,12 +628,7 @@ def api_export_xlsx():
         return jsonify({'error': f'Failed to create XLSX file: {str(e)}'}), 500
 
 
-##################################################
-# Добавить новые эндпоинты для других форматов экспорта
-# app.py - обновленный эндпоинт для CSV
-
 @app.route('/api/export-csv', methods=['POST'])
-@login_required
 @permission_required(Permissions.EXPORT_DATA)
 def api_export_csv():
     """Создание CSV документа с ссылками"""
@@ -692,11 +677,11 @@ def api_export_csv():
         logger.error(f"❌ Error creating CSV file: {e}")
         return jsonify({'error': f'Failed to create CSV file: {str(e)}'}), 500
 
+
 ##################################################
 
 
 @app.route('/api/delete-album/<album_name>', methods=['DELETE'])
-@login_required
 @permission_required(Permissions.MANAGE_ALBUMS)
 def api_delete_album(album_name):
     """Удаление альбома из БД и файловой системы"""
@@ -744,7 +729,6 @@ def api_delete_album(album_name):
 
 
 @app.route('/api/delete-article/<album_name>/<article_name>', methods=['DELETE'])
-@login_required
 @permission_required(Permissions.MANAGE_ARTICLES)
 def api_delete_article(album_name, article_name):
     """Удаление артикула из БД и файловой системы"""
@@ -794,7 +778,6 @@ def api_delete_article(album_name, article_name):
 
 # API: количество файлов в альбоме
 @app.route('/api/count/album/<album_name>')
-@login_required
 @permission_required(Permissions.VIEW_ALBUMS)
 def api_count_album(album_name):
     """Возвращает количество файлов в альбоме"""
@@ -815,7 +798,6 @@ def api_count_album(album_name):
 
 # API: количество файлов в артикуле
 @app.route('/api/count/article/<album_name>/<article_name>')
-@login_required
 @permission_required(Permissions.VIEW_ARTICLES)
 def api_count_article(album_name, article_name):
     """Возвращает количество файлов в артикуле"""
@@ -834,8 +816,36 @@ def api_count_article(album_name, article_name):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/profile')
+@permission_required(Permissions.VIEW_FILES)
+def profile():
+    """Страница профиля пользователя"""
+    user = session.get('user', {})
+    # Извлекаем имя и фамилию из данных пользователя
+    given_name = user.get('given_name', '').strip()
+    family_name = user.get('family_name', '').strip()
+    full_name = f"{given_name} {family_name}".strip() or user.get('name', 'Не указано')
+
+    # Получаем роли пользователя для отображения
+    user_roles = user.get('user_roles', [])
+
+    # Подготовим словарь с информацией о пользователе для шаблона
+    user_info = {
+        'name': user.get('name', 'Не указано'),
+        'given_name': given_name,
+        'family_name': family_name,
+        'full_name': full_name,
+        'email': user.get('email', 'Не указан'),
+        'sub': user.get('sub', 'Не указан')
+    }
+
+    return render_template('profile.html',
+                           user_info=user_info,
+                           user_roles=user_roles
+                           )
+
+
 @app.route('/admin')
-@login_required
 @permission_required(Permissions.ACCESS_ADMIN)
 def admin_panel():
     logger.info("Admin panel accessed")
@@ -846,7 +856,6 @@ def admin_panel():
 
 
 @app.route('/admin/logs')
-@login_required
 @permission_required(Permissions.VIEW_LOGS)
 def admin_logs():
     """Страница с логами действий пользователей"""
@@ -922,10 +931,7 @@ def admin_logs():
                            current_user=get_current_user())  # Передаем пользователя в шаблон
 
 
-# Добавить в app.py новые эндпоинты для админ-панели
-
 @app.route('/api/admin/db-info')
-@login_required
 @permission_required(Permissions.ACCESS_ADMIN)
 def api_admin_db_info():
     """Возвращает информацию о базе данных"""
@@ -958,7 +964,6 @@ def api_admin_db_info():
         tables_info = db_manager.execute_query("""
             SELECT 
                 table_name as name,
-                (SELECT COUNT(*) FROM information_schema.tables t2 WHERE t2.table_schema = 'public') as tables_count,
                 (xpath('/row/cnt/text()', query_to_xml(format('SELECT COUNT(*) as cnt FROM %I', table_name), false, true, '')))[1]::text::int as rows,
                 pg_size_pretty(pg_relation_size(format('%I', table_name))) as size
             FROM information_schema.tables
@@ -966,7 +971,7 @@ def api_admin_db_info():
             ORDER BY table_name
         """, fetch=True)
 
-        # Общая статистика
+        # Общая статистика - ИСПРАВЛЕННЫЕ ЗАПРОСЫ
         total_articles = db_manager.execute_query("""
             SELECT COUNT(DISTINCT article_number) as total_articles FROM files
         """, fetch=True)
@@ -981,8 +986,8 @@ def api_admin_db_info():
             'active_connections': connections[0]['count'] if connections else 0,
             'uptime': str(uptime[0]['uptime']) if uptime else 'N/A',
             'tables': tables_info if tables_info else [],
-            'total_articles': total_articles[0]['total_articles'] if total_articles else 0,
-            'total_logs': total_logs[0]['total_logs'] if total_logs else 0
+            'total_articles': total_articles[0]['total_articles'] if total_articles and len(total_articles) > 0 else 0,
+            'total_logs': total_logs[0]['total_logs'] if total_logs and len(total_logs) > 0 else 0
         })
 
     except Exception as e:
@@ -991,7 +996,6 @@ def api_admin_db_info():
 
 
 @app.route('/api/admin/system-info')
-@login_required
 @permission_required(Permissions.ACCESS_ADMIN)
 def api_admin_system_info():
     """Возвращает информацию о системе"""
@@ -1016,7 +1020,6 @@ def api_admin_system_info():
         return jsonify({'error': str(e)}), 500
 
 
-
 # Функция для закрытия соединений при выходе
 @atexit.register
 def cleanup():
@@ -1028,4 +1031,4 @@ init_db()
 
 # --- Main ---
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True, ssl_context='adhoc')
+    app.run(host='0.0.0.0', port=5000, debug=True)

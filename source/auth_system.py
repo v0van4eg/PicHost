@@ -1,15 +1,16 @@
 # auth_system.py
 
-from flask import session, redirect, url_for, request, render_template, current_app
-from functools import wraps
 import base64
 import json
-import secrets
-import os
-from authlib.integrations.flask_client import OAuth
-from utils import log_user_login, log_user_logout
-import time
 import logging
+import os
+import secrets
+from functools import wraps
+
+from authlib.integrations.flask_client import OAuth
+from flask import session, redirect, url_for, request, render_template, current_app
+
+from utils import log_user_login, log_user_logout
 
 logger = logging.getLogger(__name__)
 
@@ -156,34 +157,6 @@ class AuthManager:
         def logout():
             return self._handle_logout()
 
-        @self.app.route('/profile')
-        @login_required
-        def profile():
-            """Страница профиля пользователя"""
-            user = session.get('user', {})
-            # Извлекаем имя и фамилию из данных пользователя
-            given_name = user.get('given_name', '').strip()
-            family_name = user.get('family_name', '').strip()
-            full_name = f"{given_name} {family_name}".strip() or user.get('name', 'Не указано')
-
-            # Получаем роли пользователя для отображения
-            user_roles = user.get('user_roles', [])
-
-            # Подготовим словарь с информацией о пользователе для шаблона
-            user_info = {
-                'name': user.get('name', 'Не указано'),
-                'given_name': given_name,
-                'family_name': family_name,
-                'full_name': full_name,
-                'email': user.get('email', 'Не указан'),
-                'sub': user.get('sub', 'Не указан')
-            }
-
-            return render_template('profile.html',
-                                   user_info=user_info,
-                                   user_roles=user_roles
-                                   )
-
     def _handle_login(self):
         """Обработка входа"""
         logger.info("обработчик входа")
@@ -282,7 +255,6 @@ class AuthManager:
             <a href="/login">Попробовать снова</a>
             ''', 400
 
-
     def _handle_logout(self):
         """Обработка выхода с переходом на /hello"""
         try:
@@ -358,27 +330,19 @@ class AuthManager:
             return url_for('hello')
 
 
-# Декораторы для защиты маршрутов
-def login_required(f):
-    """Декоратор для проверки аутентификации"""
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not session.get('user'):
-            return redirect(url_for('login', next=request.url))
-        return f(*args, **kwargs)
-
-    return decorated_function
-
+# auth_system.py
 
 def permission_required(permission):
-    """Декоратор для проверки конкретного пермишена"""
+    """Единственный декоратор для проверки логина и прав"""
+
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # Проверка аутентификации
             if not session.get('user'):
                 return redirect(url_for('login', next=request.url))
 
+            # Проверка пермишена
             user = session['user']
             auth_manager = current_app.config.get('auth_manager')
 
@@ -386,7 +350,6 @@ def permission_required(permission):
                 return f'''
                 <h1>Доступ запрещен</h1>
                 <p>У вас недостаточно прав для выполнения этого действия.</p>
-                <p><strong>Требуется право:</strong> {permission}</p>
                 <a href="/">На главную</a>
                 ''', 403
 

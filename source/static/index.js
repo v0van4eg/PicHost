@@ -1391,8 +1391,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 uploadBtn.disabled = false;
                 uploadBtn.innerHTML = '<span>Загрузить архив</span>';
             }
-
-            // УДАЛЕНО: повторный сброс состояния кнопки здесь, так как он уже выполняется в updateUI()
         });
 
         xhr.addEventListener('error', function() {
@@ -1442,6 +1440,8 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.error("❌ CSV button not found during initialization");
     }
+
+
 
     // Инициализируем UI
     updateUI();

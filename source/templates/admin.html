@@ -20,7 +20,6 @@
                 <a href="{{ url_for('profile') }}">👤 Профиль</a>
                 <a href="{{ url_for('admin_logs') }}">📋 Журнал действий</a>
                 <button onclick="syncDatabase()">🔄 Синхронизация БД</button>
-                <button onclick="cleanupThumbnails()">🧹 Очистка превью</button>
                 <a href="{{ url_for('logout') }}">🚪 Выйти</a>
             </nav>
         </aside>
@@ -145,17 +144,16 @@
             hideLoading();
         }
 
-        async function loadAdminStats() {
+            async function loadAdminStats() {
             try {
-                const response = await fetch('/api/stats');
-                const data = await response.json();
+                // Загружаем основную статистику
+                const statsResponse = await fetch('/api/stats');
+                const statsData = await statsResponse.json();
 
-                document.getElementById('dbFilesCount').textContent = data.files?.total_files?.toLocaleString() || '0';
-                document.getElementById('albumsCount').textContent = data.files?.total_albums?.toLocaleString() || '0';
-                document.getElementById('articlesCount').textContent = data.db_stats?.total_articles?.toLocaleString() || '—';
-                document.getElementById('logsCount').textContent = data.db_stats?.total_logs?.toLocaleString() || '—';
+                document.getElementById('dbFilesCount').textContent = statsData.files?.total_files?.toLocaleString() || '0';
+                document.getElementById('albumsCount').textContent = statsData.files?.total_albums?.toLocaleString() || '0';
 
-                const disk = data.disk_stats['/'] || Object.values(data.disk_stats)[0];
+                const disk = statsData.disk_stats['/'] || Object.values(statsData.disk_stats)[0];
                 if (disk) {
                     const percent = disk.percent_used || 0;
                     document.getElementById('adminDiskBar').style.width = percent + '%';
@@ -165,7 +163,9 @@
                     document.getElementById('diskFree').textContent = formatBytes(disk.free);
                 }
 
-                loadDatabaseInfo();
+                // Загружаем информацию о БД (включая артикулы и логи)
+                await loadDatabaseInfo();
+
             } catch (error) {
                 console.error('Ошибка статистики:', error);
             }
@@ -181,18 +181,31 @@
                 document.getElementById('dbConnections').textContent = data.active_connections || '—';
                 document.getElementById('dbUptime').textContent = data.uptime || '—';
 
+                // ИСПРАВЛЕНО: правильное получение счетчиков артикулов и логов
+                document.getElementById('articlesCount').textContent = data.total_articles?.toLocaleString() || '0';
+                document.getElementById('logsCount').textContent = data.total_logs?.toLocaleString() || '0';
+
                 const tablesList = document.getElementById('tablesList');
                 tablesList.innerHTML = '';
-                data.tables?.forEach(table => {
-                    const div = document.createElement('div');
-                    div.className = 'table-item';
-                    div.innerHTML = `<strong>${table.name}</strong> (${table.rows || 0} записей)`;
-                    tablesList.appendChild(div);
-                });
+
+                if (data.tables && data.tables.length > 0) {
+                    data.tables.forEach(table => {
+                        const div = document.createElement('div');
+                        div.className = 'table-item';
+                        div.innerHTML = `<strong>${table.name}</strong> (${table.rows || 0} записей, ${table.size || 'N/A'})`;
+                        tablesList.appendChild(div);
+                    });
+                } else {
+                    tablesList.innerHTML = '<div class="table-item">Нет таблиц</div>';
+                }
+
             } catch (error) {
                 console.error('Ошибка БД:', error);
+                document.getElementById('articlesCount').textContent = '—';
+                document.getElementById('logsCount').textContent = '—';
             }
         }
+
 
         async function loadSystemInfo() {
             try {
