@@ -131,6 +131,21 @@ h1 {
     display: none;
 }
 
+#uploadBtn {
+    width: 100%;
+    background: #2ecc71;
+    margin-top: 10px;
+}
+
+#uploadBtn:hover {
+    background: #27ae60;
+}
+
+#uploadBtn:disabled {
+    background: #adb5bd;
+    cursor: not-allowed;
+}
+
 .btn {
     background: #3498db;
     color: white;
@@ -353,6 +368,22 @@ h1 {
     background: #adb5bd;
     cursor: not-allowed;
 }
+
+#createCSVBtn {
+    width: 100%;
+    margin-top: 10px;
+    background: #2ecc71;
+}
+
+#createCSVBtn:hover {
+    background: #27ae60;
+}
+
+#createCSVBtn:disabled {
+    background: #adb5bd;
+    cursor: not-allowed;
+}
+
 
 @media (max-width: 900px) {
     .columns {
