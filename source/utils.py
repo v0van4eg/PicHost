@@ -16,7 +16,7 @@ def safe_folder_name(name: str) -> str:
     if not name:
         return "unnamed"
     name = unicodedata.normalize('NFKD', name)
-    name = re.sub(r'[^\w\s-]', '', name, flags=re.UNICODE)
+    name = re.sub(r'[^\w\s\.-]', '', name, flags=re.UNICODE)
     name = re.sub(r'[-\s]+', '_', name, flags=re.UNICODE).strip('-_')
     return name[:255] if name else "unnamed"
 
