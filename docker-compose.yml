@@ -23,7 +23,6 @@ services:
     container_name: app
     environment:
       - DOMAIN=${DOMAIN}
-      - SESSION_TIMEOUT_MINUTES=2
       # Передаем базовые переменные для построения строки подключения
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -45,10 +44,6 @@ services:
       - ./thumbnails:/app/thumbnails
       - ./source/templates:/app/templates
       - ./source/static:/app/static
-      # Монтируем системные папки для доступа к статистике хоста
-#      - /proc:/host/proc:ro
-#      - /sys:/host/sys:ro
-#      - /etc/mtab:/host/etc/mtab:ro
     restart: always
     depends_on:
       - db

@@ -107,9 +107,6 @@ def get_client_info():
         }
 
 
-# utils.py - исправленные функции логирования
-
-# utils.py - обновить log_user_login
 
 def log_user_login(user_info, login_method='oauth'):
     """
