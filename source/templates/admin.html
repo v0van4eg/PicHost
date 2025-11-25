@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель - PicHost</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/admin.css') }}">
+</head>
+<body>
+    <div class="admin-container">
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>🖼️ PicHost</h2>
+                <span class="role">Администратор</span>
+            </div>
+
+            <nav class="nav">
+                <a href="{{ url_for('index') }}">🏠 На главную</a>
+                <a href="{{ url_for('profile') }}">👤 Профиль</a>
+                <a href="{{ url_for('admin_logs') }}">📋 Журнал действий</a>
+                <button onclick="syncDatabase()">🔄 Синхронизация БД</button>
+                <a href="{{ url_for('logout') }}">🚪 Выйти</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <h1>Админ-панель</h1>
+                <div class="user-info">
+                    <span>{{ (current_user.given_name + ' ' + current_user.family_name)|trim or current_user.name }}</span>
+                </div>
+            </header>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>📄 Файлов в БД</h3>
+                    <p id="dbFilesCount">—</p>
+                </div>
+                <div class="stat-card">
+                    <h3>📁 Альбомов</h3>
+                    <p id="albumsCount">—</p>
+                </div>
+                <div class="stat-card">
+                    <h3>📝 Артикулов</h3>
+                    <p id="articlesCount">—</p>
+                </div>
+                <div class="stat-card">
+                    <h3>📊 Логов</h3>
+                    <p id="logsCount">—</p>
+                </div>
+            </div>
+
+            <div class="content-grid">
+                <div class="card">
+                    <h3>💾 Дисковое пространство</h3>
+                    <div class="disk-usage">
+                        <div class="progress">
+                            <div class="progress-bar" id="adminDiskBar"></div>
+                        </div>
+                        <div class="disk-info">
+                            <p>Всего: <span id="diskTotal">—</span></p>
+                            <p>Использовано: <span id="diskUsed">—</span></p>
+                            <p>Свободно: <span id="diskFree">—</span></p>
+                            <p>Занято: <span id="diskPercent">—</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>🗃️ База данных</h3>
+                    <div class="db-info">
+                        <p>Размер БД: <span id="dbSize">—</span></p>
+                        <p>Таблиц: <span id="dbTables">—</span></p>
+                        <p>Подключений: <span id="dbConnections">—</span></p>
+                        <p>Время работы: <span id="dbUptime">—</span></p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>📋 Таблицы БД</h3>
+                    <div id="tablesList"></div>
+                </div>
+
+                <div class="card">
+                    <h3>💻 Система</h3>
+                    <div class="system-info">
+                        <p>Python: <span id="pythonVersion">—</span></p>
+                        <p>Flask: <span id="flaskVersion">—</span></p>
+                        <p>Сервер: <span id="serverInfo">—</span></p>
+                        <p>Время работы: <span id="appUptime">—</span></p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>👤 Пользователь</h3>
+                    <div class="user-details">
+                        <p>Логин: <span>{{ current_user.name if current_user else 'Аноним' }}</span></p>
+                        <p>Полное имя: <span>{{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</span></p>
+                        <p>Email: <span>{{ current_user.email if current_user else 'N/A' }}</span></p>
+                        <p>ID: <span>{{ current_user.sub if current_user else 'N/A' }}</span></p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingDetails">Пожалуйста, подождите</p>
+        </div>
+    </div>
+
+    <script>
+        async function syncDatabase() {
+            showLoading('Синхронизация БД...');
+            try {
+                const response = await fetch('/api/sync');
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert(`Синхронизация завершена!\nУдалено: ${data.deleted}, Добавлено: ${data.added}`);
+                    loadAdminStats();
+                } else {
+                    throw new Error(data.error || 'Ошибка синхронизации');
+                }
+            } catch (error) {
+                alert('Ошибка синхронизации: ' + error.message);
+            }
+            hideLoading();
+        }
+
+        async function cleanupThumbnails() {
+            if (!confirm('Очистить все превью?')) return;
+
+            showLoading('Очистка превью...');
+            try {
+                await fetch('/api/cleanup-thumbnails/all', { method: 'POST' });
+                alert('Очистка завершена');
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
+            hideLoading();
+        }
+
+            async function loadAdminStats() {
+            try {
+                // Загружаем основную статистику
+                const statsResponse = await fetch('/api/stats');
+                const statsData = await statsResponse.json();
+
+                document.getElementById('dbFilesCount').textContent = statsData.files?.total_files?.toLocaleString() || '0';
+                document.getElementById('albumsCount').textContent = statsData.files?.total_albums?.toLocaleString() || '0';
+
+                const disk = statsData.disk_stats['/'] || Object.values(statsData.disk_stats)[0];
+                if (disk) {
+                    const percent = disk.percent_used || 0;
+                    document.getElementById('adminDiskBar').style.width = percent + '%';
+                    document.getElementById('diskPercent').textContent = percent + '%';
+                    document.getElementById('diskTotal').textContent = formatBytes(disk.total);
+                    document.getElementById('diskUsed').textContent = formatBytes(disk.used);
+                    document.getElementById('diskFree').textContent = formatBytes(disk.free);
+                }
+
+                // Загружаем информацию о БД (включая артикулы и логи)
+                await loadDatabaseInfo();
+
+            } catch (error) {
+                console.error('Ошибка статистики:', error);
+            }
+        }
+
+        async function loadDatabaseInfo() {
+            try {
+                const response = await fetch('/api/admin/db-info');
+                const data = await response.json();
+
+                document.getElementById('dbSize').textContent = data.database_size || '—';
+                document.getElementById('dbTables').textContent = data.tables_count || '—';
+                document.getElementById('dbConnections').textContent = data.active_connections || '—';
+                document.getElementById('dbUptime').textContent = data.uptime || '—';
+
+                // ИСПРАВЛЕНО: правильное получение счетчиков артикулов и логов
+                document.getElementById('articlesCount').textContent = data.total_articles?.toLocaleString() || '0';
+                document.getElementById('logsCount').textContent = data.total_logs?.toLocaleString() || '0';
+
+                const tablesList = document.getElementById('tablesList');
+                tablesList.innerHTML = '';
+
+                if (data.tables && data.tables.length > 0) {
+                    data.tables.forEach(table => {
+                        const div = document.createElement('div');
+                        div.className = 'table-item';
+                        div.innerHTML = `<strong>${table.name}</strong> (${table.rows || 0} записей, ${table.size || 'N/A'})`;
+                        tablesList.appendChild(div);
+                    });
+                } else {
+                    tablesList.innerHTML = '<div class="table-item">Нет таблиц</div>';
+                }
+
+            } catch (error) {
+                console.error('Ошибка БД:', error);
+                document.getElementById('articlesCount').textContent = '—';
+                document.getElementById('logsCount').textContent = '—';
+            }
+        }
+
+
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch('/api/admin/system-info');
+                const data = await response.json();
+
+                document.getElementById('pythonVersion').textContent = data.python_version || '—';
+                document.getElementById('flaskVersion').textContent = data.flask_version || '—';
+                document.getElementById('serverInfo').textContent = data.server_info || '—';
+                document.getElementById('appUptime').textContent = data.uptime || '—';
+            } catch (error) {
+                console.error('Ошибка системы:', error);
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showLoading(text) {
+            document.getElementById('loadingDetails').textContent = text;
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAdminStats();
+            loadSystemInfo();
+            setInterval(loadAdminStats, 120000); // Обновление каждые 2 минуты
+        });
+    </script>
+</body>
+</html>

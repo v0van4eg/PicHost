@@ -1,0 +1,121 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 1400px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+    color: #333;
+}
+
+.filters {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+}
+
+.filters label {
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.filters input, .filters select {
+    padding: 5px;
+    margin: 0 5px 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.filters button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.filters button:hover {
+    background-color: #0056b3;
+}
+
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 0.9em;
+}
+
+.log-table th, .log-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.log-table th {
+    background-color: #f2f2f2;
+    position: sticky;
+    top: 0;
+}
+
+.log-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.log-table tr:hover {
+    background-color: #f1f1f1;
+}
+
+.pagination {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.pagination a {
+    padding: 8px 16px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    color: #007bff;
+}
+
+.pagination a.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.pagination a:hover:not(.active) {
+    background-color: #e9ecef;
+}
+
+.details {
+    max-width: 300px;
+    word-wrap: break-word;
+    font-family: monospace;
+    font-size: 0.8em;
+}
+
+.user-column {
+    min-width: 150px;
+}
+
+.action-column {
+    min-width: 100px;
+}
+
+.time-column {
+    min-width: 140px;
+}
+
+.resource-column {
+    min-width: 120px;
+}

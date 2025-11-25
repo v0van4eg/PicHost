@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Профиль пользователя</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/profile.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👤 Профиль пользователя</h1>
+            <a href="/">На главную</a>
+        </header>
+
+        <div class="profile-card">
+            <h2>Основная информация</h2>
+            <div class="profile-info">
+                <p><strong>Имя пользователя:</strong> {{ user_info.name }}</p>
+                <p><strong>Имя:</strong> {{ user_info.given_name or 'Не указано' }}</p>
+                <p><strong>Фамилия:</strong> {{ user_info.family_name or 'Не указано' }}</p>
+                <p><strong>Полное имя:</strong> {{ user_info.full_name }}</p>
+                <p><strong>Email:</strong> {{ user_info.email }}</p>
+                <p><strong>ID:</strong> {{ user_info.sub }}</p>
+            </div>
+
+            <h2>Роли в системе</h2>
+            <div class="profile-roles">
+                {% if user_roles %}
+                    <ul>
+                        {% for role in user_roles %}
+                            <li>{{ role }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Нет назначенных ролей</p>
+                {% endif %}
+            </div>
+            <!-- Тут будет информация о правах доступа -->
+            <div class="role-info" style="margin-top: 15px; padding: 10px; background: #e8f4fd; border-radius: 6px; border-left: 4px solid #3498db;">
+                <h3 style="margin-top: 0; color: #2c3e50;">Информация о правах доступа</h3>
+
+                {% if is_appviewer_by_default %}
+                <div style="background: #fff3cd; padding: 8px; border-radius: 4px; margin: 5px 0;">
+                    <strong>⚠️ Роль назначена автоматически</strong>
+                    <p style="margin: 5px 0 0 0; font-size: 0.9rem;">
+                        Вам была автоматически назначена роль <strong>appviewer</strong>, так как у вас не было назначенных ролей в системе.
+                    </p>
+                </div>
+                {% endif %}
+
+                <p style="margin: 5px 0;">
+                    <strong>Тип доступа:</strong>
+                    {% if has_default_role %}
+                        <span style="color: #e67e22;">Автоматический (по умолчанию)</span>
+                    {% else %}
+                        <span style="color: #27ae60;">Назначенный администратором</span>
+                    {% endif %}
+                </p>
+            </div>
+            {% if has_permission(Permissions.ACCESS_ADMIN) %}
+            <div class="admin-notice">
+                <p>✅ Вы имеете права администратора системы</p>
+                <a href="/admin">Перейти в панель администратора</a>
+            </div>
+            {% else %}
+                        <p>У вас нет прав админа</p>
+            {% endif %}
+            <div class="profile-actions">
+                <a href="/logout" class="btn btn-logout">Выйти</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

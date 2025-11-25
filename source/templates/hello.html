@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/hello.css') }}">
+</head>
+<body>
+    <div class="hello-container">
+        <h1>Добро пожаловать в PicHost!</h1>
+        <p>Система хостинга изображений</p>
+        <a href="/login" class="login-link">🔐 Войти в систему</a>
+    </div>
+</body>
+</html>

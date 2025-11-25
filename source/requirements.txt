@@ -1,0 +1,10 @@
+flask
+pillow
+openpyxl
+gunicorn
+psycopg2-binary
+authlib
+jwt
+requests
+python-dotenv
+werkzeug

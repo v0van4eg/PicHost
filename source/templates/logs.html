@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Журнал Действий - Админ-панель</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/logs.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Журнал Действий Пользователей</h1>
+        <a href="/admin" style="color: black; text-decoration: underline;">← Назад к админ-панели</a>
+
+        <div class="filters">
+            <form method="GET">
+                <label for="search_user">Поиск по пользователю:</label>
+                <input type="text" id="search_user" name="search_user" value="{{ search_user or '' }}" placeholder="Имя пользователя...">
+
+                <label for="search_action">Тип действия:</label>
+                <select id="search_action" name="search_action">
+                    <option value="">Все действия</option>
+                    {% for action in available_actions %}
+                        <option value="{{ action }}" {% if search_action == action %}selected{% endif %}>{{ action }}</option>
+                    {% endfor %}
+                </select>
+
+                <label for="date_from">Дата от:</label>
+                <input type="date" id="date_from" name="date_from" value="{{ date_from or '' }}">
+
+                <label for="date_to">Дата до:</label>
+                <input type="date" id="date_to" name="date_to" value="{{ date_to or '' }}">
+
+                <button type="submit">Применить фильтры</button>
+                <a href="{{ url_for('admin_logs') }}" style="margin-left: 10px; color: #6c757d;">Сбросить</a>
+            </form>
+        </div>
+
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th class="time-column">Время</th>
+                    <th class="user-column">Пользователь</th>
+                    <th class="action-column">Действие</th>
+                    <th class="resource-column">Тип Ресурса</th>
+                    <th class="resource-column">Имя Ресурса</th>
+                    <th>Детали</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</td>
+                    <td><strong>{{ log.username }}</strong><br><small style="color: #666;">ID: {{ log.user_id[:8] if log.user_id else 'N/A' }}</small></td>
+                    <td>
+                        <span style="padding: 2px 6px; border-radius: 3px;
+                            {% if log.action == 'login' %}background: #d4edda; color: #155724;
+                            {% elif log.action == 'logout' %}background: #f8d7da; color: #721c24;
+                            {% elif log.action == 'upload' %}background: #cce7ff; color: #004085;
+                            {% else %}background: #e2e3e5; color: #383d41;{% endif %}">
+                            {{ log.action }}
+                        </span>
+                    </td>
+                    <td>{{ log.resource_type or '—' }}</td>
+                    <td>{{ log.resource_name or '—' }}</td>
+                    <td class="details">
+                        {% if log.details %}
+                            {% set details_dict = log.details %}
+                            {% if details_dict is string %}
+                                {{ details_dict }}
+                            {% else %}
+                                {% for key, value in details_dict.items() %}
+                                    {% if key == 'ip_address' %}
+                                        <strong>IP:</strong> {{ value }}<br>
+                                    {% elif key == 'album_name' %}
+                                        <strong>Альбом:</strong> {{ value }}<br>
+                                    {% elif key == 'original_filename' %}
+                                        <strong>Файл:</strong> {{ value }}<br>
+                                    {% elif key == 'email' %}
+                                        <strong>Email:</strong> {{ value }}<br>
+                                    {% elif key == 'given_name' %}
+                                        <strong>Имя:</strong> {{ value }}<br>
+                                    {% elif key == 'family_name' %}
+                                        <strong>Фамилия:</strong> {{ value }}<br>
+                                    {% else %}
+                                        <strong>{{ key }}:</strong> {{ value }}<br>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 40px;">Нет записей журнала для отображения.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Пагинация -->
+        {% if total_count > per_page %}
+        <div class="pagination">
+            {% for p in range(1, (total_count // per_page) + 2) %}
+                {% if p == page %}
+                    <a href="#" class="active">{{ p }}</a>
+                {% else %}
+                    <!-- Сохраняем параметры фильтрации при переходе по страницам -->
+                    <a href="{{ url_for('admin_logs', page=p, search_user=search_user, search_action=search_action, date_from=date_from, date_to=date_to) }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div style="margin-top: 20px; color: #6c757d; font-size: 0.9em;">
+            Всего записей: {{ total_count }}
+        </div>
+    </div>
+</body>
+</html>
