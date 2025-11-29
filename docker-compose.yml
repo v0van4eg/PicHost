@@ -61,6 +61,7 @@ services:
       - ./source/templates:/app/templates:ro
       - ./images:/app/images:rw
       - ./thumbnails:/app/thumbnails:rw
+      - ./logs:/var/log/nginx
     restart: always
     depends_on:
       - app
