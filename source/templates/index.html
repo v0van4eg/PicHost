@@ -89,34 +89,6 @@
                         </form>
                     </div>
 
-                    <!-- Статистика - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВО SYNC_DATABASE -->
-                    {% if has_permission(Permissions.SYNC_DATABASE) %}
-                    <div class="stats-card" id="statsCard">
-                        <h3>📊 Статистика хранилища</h3>
-                        <div class="stats-content">
-                            <div class="stat-item">
-                                <span class="stat-label">Хранилище:</span>
-                                <div class="disk-bar">
-                                    <div class="disk-bar-fill" id="diskBarFill"></div>
-                                </div>
-                                <div class="stat-value" id="diskUsage" style="width: 100%; text-align: center; margin-top: 5px; font-size: 0.8rem;">
-                                    Загрузка...
-                                </div>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Всего файлов:</span>
-                                <span class="stat-value" id="totalFiles">0</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Всего альбомов:</span>
-                                <span class="stat-value" id="totalAlbums">0</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-refresh" id="refreshStatsBtn" style="margin-top: 10px; width: 100%;">
-                            🔄 Обновить
-                        </button>
-                    </div>
-                    {% endif %}
 
                     <button class="btnmanage" id="manageBtn">
                         <span>Управление ссылками</span>
@@ -162,6 +134,35 @@
                         </div>
                         {% endif %}
                     </div>
+                    <!-- Статистика - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВО SYNC_DATABASE -->
+                    {% if has_permission(Permissions.SYNC_DATABASE) %}
+                    <div class="stats-card" id="statsCard">
+                        <h3>📊 Статистика хранилища</h3>
+                        <div class="stats-content">
+                            <div class="stat-item">
+                                <span class="stat-label">Хранилище:</span>
+                                <div class="disk-bar">
+                                    <div class="disk-bar-fill" id="diskBarFill"></div>
+                                </div>
+                                <div class="stat-value" id="diskUsage" style="width: 100%; text-align: center; margin-top: 5px; font-size: 0.8rem;">
+                                    Загрузка...
+                                </div>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Всего файлов:</span>
+                                <span class="stat-value" id="totalFiles">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Всего альбомов:</span>
+                                <span class="stat-value" id="totalAlbums">0</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-refresh" id="refreshStatsBtn" style="margin-top: 10px; width: 100%;">
+                            🔄 Обновить
+                        </button>
+                    </div>
+                    {% endif %}
+
                     <!-- Кнопка "Назад к загрузке" скрыта у пользователей без права UPLOAD_ZIP -->
                     <button class="btnmanage" id="backToUploadBtn"
                         {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
