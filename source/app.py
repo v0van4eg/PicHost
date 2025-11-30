@@ -15,6 +15,11 @@ from flask import Flask, request, session, jsonify, render_template, send_from_d
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+# Импорты для Prometheus
+from prometheus_client import Counter, Gauge, Histogram, Summary, generate_latest, CollectorRegistry, multiprocess
+from prometheus_client.exposition import choose_encoder
+import prometheus_client
+
 from auth_system import AuthManager, permission_required, auth_context_processor, \
     is_authenticated, get_current_user, Permissions
 from database import db_manager as db_manager
@@ -30,6 +35,67 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Добавить в начало app.py для отслеживания времени запуска
 app.start_time = datetime.now()
+
+# Определение метрик Prometheus
+REQUEST_COUNT = Counter(
+    'http_requests_total', 
+    'Total HTTP requests', 
+    ['method', 'endpoint', 'status']
+)
+
+REQUEST_DURATION = Histogram(
+    'http_request_duration_seconds', 
+    'HTTP request duration in seconds', 
+    ['method', 'endpoint']
+)
+
+ACTIVE_CONNECTIONS = Gauge(
+    'active_connections', 
+    'Number of active connections'
+)
+
+ALBUM_COUNT = Gauge(
+    'album_count', 
+    'Number of albums'
+)
+
+ARTICLE_COUNT = Gauge(
+    'article_count', 
+    'Number of articles'
+)
+
+FILE_COUNT = Gauge(
+    'file_count', 
+    'Number of files'
+)
+
+DISK_USAGE_TOTAL = Gauge(
+    'disk_usage_bytes_total', 
+    'Total disk space in bytes',
+    ['path']
+)
+
+DISK_USAGE_FREE = Gauge(
+    'disk_usage_bytes_free', 
+    'Free disk space in bytes',
+    ['path']
+)
+
+DISK_USAGE_USED = Gauge(
+    'disk_usage_bytes_used', 
+    'Used disk space in bytes',
+    ['path']
+)
+
+DB_SIZE = Gauge(
+    'database_size_bytes', 
+    'Database size in bytes'
+)
+
+UPTIME = Gauge(
+    'application_uptime_seconds', 
+    'Application uptime in seconds'
+)
 
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
@@ -200,6 +266,102 @@ def init_db():
 
 
 # Оптимизированное получение альбомов
+def update_metrics():
+    """Обновление метрик на основе текущего состояния системы"""
+    try:
+        # Обновление числа альбомов
+        albums_result = db_manager.execute_query(
+            "SELECT COUNT(DISTINCT album_name) as total_albums FROM files",
+            fetch=True
+        )
+        total_albums = albums_result[0]['total_albums'] if albums_result else 0
+        ALBUM_COUNT.set(total_albums)
+
+        # Обновление числа артикулов
+        articles_result = db_manager.execute_query(
+            "SELECT COUNT(DISTINCT article_number) as total_articles FROM files",
+            fetch=True
+        )
+        total_articles = articles_result[0]['total_articles'] if articles_result else 0
+        ARTICLE_COUNT.set(total_articles)
+
+        # Обновление числа файлов
+        files_result = db_manager.execute_query(
+            "SELECT COUNT(*) as total_files FROM files",
+            fetch=True
+        )
+        total_files = files_result[0]['total_files'] if files_result else 0
+        FILE_COUNT.set(total_files)
+
+        # Обновление статистики дискового пространства
+        # Проверяем различные возможные точки монтирования
+        mount_points_to_check = [
+            '/app/images',  # папка с изображениями в контейнере
+            '/images',  # альтернативный путь
+            '/'  # корневая файловая система как запасной вариант
+        ]
+
+        for mount_point in mount_points_to_check:
+            try:
+                usage = shutil.disk_usage(mount_point)
+                total = usage.total
+                used = usage.used
+                free = usage.free
+
+                DISK_USAGE_TOTAL.labels(path=mount_point).set(total)
+                DISK_USAGE_USED.labels(path=mount_point).set(used)
+                DISK_USAGE_FREE.labels(path=mount_point).set(free)
+                break
+            except (OSError, IOError, FileNotFoundError):
+                continue
+
+        # Обновление размера базы данных
+        db_size_result = db_manager.execute_query(
+            "SELECT pg_database_size(current_database()) as db_size",
+            fetch=True
+        )
+        if db_size_result:
+            db_size_bytes = db_size_result[0]['db_size']
+            DB_SIZE.set(db_size_bytes)
+
+        # Обновление времени работы приложения
+        uptime = (datetime.now() - app.start_time).total_seconds()
+        UPTIME.set(uptime)
+
+        # Обновление числа активных подключений (примерное значение)
+        # В реальном приложении это может быть сложнее реализовать, поэтому пока ставим 0
+        ACTIVE_CONNECTIONS.set(0)
+
+    except Exception as e:
+        logger.error(f"Error updating metrics: {e}")
+
+
+# Middleware для подсчета запросов и времени выполнения
+@app.before_request
+def before_request():
+    request.start_time = time.time()
+
+
+@app.after_request
+def after_request(response):
+    # Обновляем счетчики метрик
+    REQUEST_COUNT.labels(
+        method=request.method,
+        endpoint=request.endpoint or request.path,
+        status=response.status_code
+    ).inc()
+
+    if hasattr(request, 'start_time'):
+        duration = time.time() - request.start_time
+        REQUEST_DURATION.labels(
+            method=request.method,
+            endpoint=request.endpoint or request.path
+        ).observe(duration)
+
+    return response
+
+
+# Оптимизированное получение альбомов
 def get_albums():
     # Используем составной индекс idx_files_album_article
     results = db_manager.execute_query("""
@@ -361,6 +523,19 @@ def api_stats():
             'error': str(e),
             'status': 'error'
         }), 500
+
+
+# Эндпоинт для метрик Prometheus
+@app.route('/metrics')
+def prometheus_metrics():
+    """Возвращает метрики в формате Prometheus"""
+    # Обновляем метрики перед отправкой
+    update_metrics()
+    
+    # Генерируем и возвращаем метрики
+    registry = prometheus_client.REGISTRY
+    data, content_type = choose_encoder(request.headers.get("Accept"))
+    return data(registry), 200, {"Content-Type": content_type}
 
 
 # --- Routes ---
@@ -1125,8 +1300,30 @@ def cleanup():
     db_manager.close()
 
 
+# Запуск периодического обновления метрик в отдельном потоке
+def start_metrics_updater():
+    import threading
+    import time
+    
+    def update_loop():
+        while True:
+            try:
+                update_metrics()
+                time.sleep(30)  # Обновляем метрики каждые 30 секунд
+            except Exception as e:
+                logger.error(f"Error in metrics update loop: {e}")
+                time.sleep(30)  # Даже при ошибке продолжаем цикл
+    
+    # Запускаем в отдельном потоке
+    metrics_thread = threading.Thread(target=update_loop, daemon=True)
+    metrics_thread.start()
+
+
 # Инициализация базы данных при запуске приложения
 init_db()
+
+# Запуск обновления метрик
+start_metrics_updater()
 
 # --- Main ---
 if __name__ == '__main__':
