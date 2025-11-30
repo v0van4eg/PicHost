@@ -65,6 +65,29 @@
                             </div>
                         </div>
                     </form>
+                    
+                    <!-- Карточка загрузки отдельных изображений -->
+                    <div class="card" id="uploadImageCard" style="margin-top: 20px;">
+                        <h2>🖼️ Загрузить отдельные изображения</h2>
+                        <form id="uploadImageForm" enctype="multipart/form-data">
+                            <div class="upload-area" id="imageDropArea">
+                                <p>Перетащите изображения сюда</p>
+                                <p>или</p>
+                                <button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>
+                                <input type="file" id="imageFile" name="image" accept="image/*" class="file-input" multiple>
+                            </div>
+
+                            <button type="submit" class="btn" id="uploadImageBtn" disabled>
+                                <span>Загрузить изображения</span>
+                            </button>
+
+                            <div id="imageProgressContainer" style="display: none;">
+                                <div id="imageProgressBar">
+                                    <span id="imageProgressText">0%</span>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
 
                     <!-- Статистика - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВО SYNC_DATABASE -->
                     {% if has_permission(Permissions.SYNC_DATABASE) %}
