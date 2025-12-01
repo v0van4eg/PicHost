@@ -34,7 +34,7 @@
             <div class="column-left">
                 <!-- Карточка загрузки - показывается только если есть право UPLOAD_ZIP -->
                 <div class="card" id="uploadCard"
-                     {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
+                    {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                     <h2>📤 Загрузите ZIP-архив</h2>
                     <form id="uploadForm" enctype="multipart/form-data"
                           {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
@@ -65,34 +65,35 @@
                             </div>
                         </div>
                     </form>
-                    
-                    <!-- Карточка загрузки отдельных изображений -->
-                    <hr>
-                    <div id="uploadImageCard">
-                        <h2>🖼️ Загрузить отдельные изображения</h2>
-                        <form id="uploadImageForm" enctype="multipart/form-data">
-                            <div class="upload-area" id="imageDropArea">
-                                <p>Перетащите изображения сюда</p>
-                                <p>или</p>
-                                <button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>
-                                <input type="file" id="imageFile" name="image" accept="image/*" class="file-input" multiple>
-                            </div>
-
-                            <button type="submit" class="btn" id="uploadImageBtn" disabled>
-                                <span>Загрузить изображения</span>
-                            </button>
-
-                            <div id="imageProgressContainer" style="display: none;">
-                                <div id="imageProgressBar">
-                                    <span id="imageProgressText">0%</span>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <button class="btnmanage" id="manageBtn">
-                        <span>Управление ссылками</span>
-                    </button>
                 </div>
+
+                <!-- Карточка загрузки отдельных изображений -->
+                <div class="card" id="uploadImageCard"
+                    {% if not has_permission(Permissions.UPLOAD_ZIP) %} style="display: none;"{% endif %}>
+                    <h2>🖼️ Загрузить отдельные изображения</h2>
+                    <form id="uploadImageForm" enctype="multipart/form-data" {% if not has_permission(Permissions.UPLOAD_ZIP) %} style="display: none;"{% endif %}>
+                        <div class="upload-area" id="imageDropArea">
+                            <p>Перетащите изображения сюда</p>
+                            <p>или</p>
+                            <button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>
+                            <input type="file" id="imageFile" name="image" accept="image/*" class="file-input" multiple>
+                        </div>
+
+                        <button type="submit" class="btn" id="uploadImageBtn" disabled>
+                            <span>Загрузить изображения</span>
+                        </button>
+
+                        <div id="imageProgressContainer" style="display: none;">
+                            <div id="imageProgressBar">
+                                <span id="imageProgressText">0%</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <button class="btnmanage" id="manageBtn">
+                    <span>Управление ссылками</span>
+                </button>
+
 
                 <!-- Карточка управления ссылками - показывается сразу если нет права UPLOAD_ZIP -->
                 <div id="manageCard"
@@ -169,6 +170,8 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Левая колонка -->
             <div class="column-right">
                 <div class="card links-section">
                     <h2>
