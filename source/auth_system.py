@@ -48,7 +48,6 @@ ROLE_PERMISSIONS = {
         Permissions.VIEW_ALBUMS,
         Permissions.VIEW_ARTICLES,
         Permissions.VIEW_FILES,
-        Permissions.UPLOAD_ZIP,
         Permissions.EXPORT_DATA
     ],
     'appadmin': [
