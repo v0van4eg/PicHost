@@ -110,10 +110,13 @@ h1 {
 
 .tab-content {
     display: none;
+    flex: 1;
+    min-height: 0; /* Allows flex items to shrink below their content */
 }
 
 .tab-content.active {
     display: flex;
+    flex-direction: column;
 }
 
 /* Стили для кнопки переключения вида */
