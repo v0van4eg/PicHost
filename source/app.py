@@ -21,7 +21,7 @@ from prometheus_client.exposition import choose_encoder
 import prometheus_client
 
 from auth_system import AuthManager, permission_required, auth_context_processor, \
-    is_authenticated, get_current_user, Permissions
+    is_authenticated, get_current_user, Permissions, ROLE_PERMISSIONS
 from database import db_manager as db_manager
 from document_generator import init_document_generator, get_document_generator
 from sync_manager import SyncManager
@@ -1113,10 +1113,42 @@ def profile():
         'sub': user.get('sub', 'Не указан')
     }
 
+    # Получаем информацию о том, была ли роль назначена по умолчанию
+    has_default_role = user.get('has_default_role', False)
+    is_appviewer_by_default = has_default_role and 'appviewer' in user_roles
+    
     return render_template('profile.html',
                            user_info=user_info,
-                           user_roles=user_roles
+                           user_roles=user_roles,
+                           has_default_role=has_default_role,
+                           is_appviewer_by_default=is_appviewer_by_default
                            )
+
+
+@app.route('/api/roles')
+@permission_required(Permissions.VIEW_ALBUMS)  # Любой аутентифицированный пользователь может получить список ролей
+def api_roles():
+    """Возвращает список всех возможных ролей в системе"""
+    try:
+        # Возвращаем только ключи (названия ролей) из ROLE_PERMISSIONS
+        available_roles = list(ROLE_PERMISSIONS.keys())
+        return jsonify(available_roles)
+    except Exception as e:
+        logger.error(f"Error getting roles list: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/my-roles')
+@permission_required(Permissions.VIEW_ALBUMS)  # Любой аутентифицированный пользователь может получить свои роли
+def api_my_roles():
+    """Возвращает список ролей текущего пользователя"""
+    try:
+        user = session.get('user', {})
+        user_roles = user.get('user_roles', [])
+        return jsonify(user_roles)
+    except Exception as e:
+        logger.error(f"Error getting user roles: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/admin')
@@ -1124,8 +1156,8 @@ def profile():
 def admin_panel():
     logger.info("Admin panel accessed")
     user = session.get('user', {})
-    display_roles = user.get('display_roles', [])
-    all_roles = user.get('roles', [])
+    display_roles = user.get('user_roles', [])
+    all_roles = user.get('user_roles', [])
     return render_template('admin.html', display_roles=display_roles, all_roles=all_roles)
 
 
