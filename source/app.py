@@ -378,7 +378,8 @@ def api_stats():
 @app.route('/metrics')
 def prometheus_metrics():
     """Возвращает метрики в формате Prometheus"""
-    # Метрики обновляются в фоновом режиме, поэтому просто возвращаем их
+    # Обновляем метрики при каждом запросе
+    update_metrics(app.start_time)
     registry = prometheus_client.REGISTRY
     data, content_type = choose_encoder(request.headers.get("Accept"))
     return data(registry), 200, {"Content-Type": content_type}

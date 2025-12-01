@@ -66,7 +66,7 @@ UPTIME = Gauge(
 
 def update_metrics(start_time=None):
     """Обновление метрик на основе текущего состояния системы. 
-    Вызывается в фоновом режиме для избежания чрезмерных обращений к БД при запросах к /metrics"""
+    Вызывается при запросе к /metrics"""
     try:
         # Обновление числа альбомов
         albums_result = db_manager.execute_query(
