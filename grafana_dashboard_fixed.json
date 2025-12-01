@@ -21,31 +21,191 @@
     "panels": [
       {
         "id": 1,
-        "title": "Overview",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
         "type": "stat",
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "title": "Total Albums",
         "targets": [
           {
             "expr": "album_count",
-            "legendFormat": "Albums",
             "refId": "A"
-          },
-          {
-            "expr": "article_count",
-            "legendFormat": "Articles",
-            "refId": "B"
-          },
-          {
-            "expr": "file_count",
-            "legendFormat": "Files",
-            "refId": "C"
           }
         ],
         "fieldConfig": {
           "defaults": {
             "unit": "short",
             "min": 0,
-            "max": 100,
+            "max": 10000,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 5000
+                },
+                {
+                  "color": "red",
+                  "value": 8000
+                }
+              ]
+            }
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": ["lastNotNull"],
+            "fields": "",
+            "values": false
+          },
+          "text": {},
+          "textMode": "auto"
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "type": "stat",
+        "title": "Total Articles",
+        "targets": [
+          {
+            "expr": "article_count",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "max": 10000,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 5000
+                },
+                {
+                  "color": "red",
+                  "value": 8000
+                }
+              ]
+            }
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": ["lastNotNull"],
+            "fields": "",
+            "values": false
+          },
+          "text": {},
+          "textMode": "auto"
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "type": "stat",
+        "title": "Total Files",
+        "targets": [
+          {
+            "expr": "file_count",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "max": 50000,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 30000
+                },
+                {
+                  "color": "red",
+                  "value": 45000
+                }
+              ]
+            }
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": ["lastNotNull"],
+            "fields": "",
+            "values": false
+          },
+          "text": {},
+          "textMode": "auto"
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "type": "stat",
+        "title": "Application Uptime",
+        "targets": [
+          {
+            "expr": "application_uptime_seconds",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
             "color": {
               "mode": "thresholds"
             },
@@ -60,20 +220,29 @@
           }
         },
         "options": {
-          "orientation": "auto",
-          "text": {},
           "colorMode": "value",
-          "graphMode": "area",
+          "graphMode": "none",
           "justifyMode": "auto",
-          "alignItems": "center",
-          "values": true
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": ["lastNotNull"],
+            "fields": "",
+            "values": false
+          },
+          "text": {},
+          "textMode": "auto"
         }
       },
       {
-        "id": 2,
-        "title": "Disk Usage",
+        "id": 5,
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
         "type": "gauge",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "title": "Disk Usage Percentage",
         "targets": [
           {
             "expr": "(disk_usage_bytes_used{path=\"/app/images\"} / disk_usage_bytes_total{path=\"/app/images\"}) * 100",
@@ -124,16 +293,24 @@
             "values": false
           },
           "orientation": "auto",
-          "fieldOptions": {
-            "calcs": ["lastNotNull"]
-          }
+          "displayMode": "gradient",
+          "minVizHeight": 75,
+          "minVizWidth": 75,
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto"
         }
       },
       {
-        "id": 3,
-        "title": "Disk Space Usage (bytes)",
+        "id": 6,
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
         "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "title": "Disk Space Usage (bytes)",
         "targets": [
           {
             "expr": "disk_usage_bytes_total{path=\"/app/images\"}",
@@ -165,182 +342,27 @@
         },
         "options": {
           "tooltip": {
-            "mode": "single"
+            "mode": "single",
+            "sort": "none"
           },
           "legend": {
             "showLegend": true,
             "displayMode": "list",
-            "placement": "bottom"
+            "placement": "bottom",
+            "calcs": []
           }
         }
       },
       {
-        "id": 12,
-        "title": "Disk Space Usage Alternative Paths (bytes)",
+        "id": 7,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 17
+        },
         "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
-        "targets": [
-          {
-            "expr": "disk_usage_bytes_total{path=\"/images\"}",
-            "legendFormat": "Total (/images)",
-            "refId": "A"
-          },
-          {
-            "expr": "disk_usage_bytes_used{path=\"/images\"}",
-            "legendFormat": "Used (/images)",
-            "refId": "B"
-          },
-          {
-            "expr": "disk_usage_bytes_free{path=\"/images\"}",
-            "legendFormat": "Free (/images)",
-            "refId": "C"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "bytes",
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "lineWidth": 1,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "tooltip": {
-            "mode": "single"
-          },
-          "legend": {
-            "showLegend": true,
-            "displayMode": "list",
-            "placement": "bottom"
-          }
-        }
-      },
-      {
-        "id": 13,
-        "title": "Root Disk Space Usage (bytes)",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
-        "targets": [
-          {
-            "expr": "disk_usage_bytes_total{path=\"/\"}",
-            "legendFormat": "Total (/)",
-            "refId": "A"
-          },
-          {
-            "expr": "disk_usage_bytes_used{path=\"/\"}",
-            "legendFormat": "Used (/)",
-            "refId": "B"
-          },
-          {
-            "expr": "disk_usage_bytes_free{path=\"/\"}",
-            "legendFormat": "Free (/)",
-            "refId": "C"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "bytes",
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "lineWidth": 1,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "tooltip": {
-            "mode": "single"
-          },
-          "legend": {
-            "showLegend": true,
-            "displayMode": "list",
-            "placement": "bottom"
-          }
-        }
-      },
-      {
-        "id": 4,
-        "title": "Database Size",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
-        "targets": [
-          {
-            "expr": "database_size_bytes",
-            "legendFormat": "Database Size",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "bytes",
-            "color": {
-              "mode": "palette-classic"
-            }
-          }
-        },
-        "options": {
-          "tooltip": {
-            "mode": "single"
-          },
-          "legend": {
-            "showLegend": true,
-            "displayMode": "list",
-            "placement": "bottom"
-          }
-        }
-      },
-      {
-        "id": 5,
-        "title": "Application Uptime",
-        "type": "stat",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
-        "targets": [
-          {
-            "expr": "application_uptime_seconds",
-            "legendFormat": "Uptime",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "s",
-            "color": {
-              "mode": "thresholds"
-            },
-            "thresholds": {
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                }
-              ]
-            }
-          }
-        },
-        "options": {
-          "colorMode": "value",
-          "graphMode": "none",
-          "justifyMode": "auto",
-          "orientation": "auto",
-          "reduceOptions": {
-            "calcs": ["lastNotNull"],
-            "fields": "",
-            "values": false
-          },
-          "text": {}
-        }
-      },
-      {
-        "id": 6,
         "title": "HTTP Request Rate",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
         "targets": [
           {
             "expr": "sum(rate(http_requests_total[5m])) by (method)",
@@ -358,20 +380,27 @@
         },
         "options": {
           "tooltip": {
-            "mode": "single"
+            "mode": "single",
+            "sort": "none"
           },
           "legend": {
             "showLegend": true,
             "displayMode": "list",
-            "placement": "bottom"
+            "placement": "bottom",
+            "calcs": []
           }
         }
       },
       {
-        "id": 7,
-        "title": "HTTP Status Codes",
+        "id": 8,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 17
+        },
         "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "title": "HTTP Status Codes",
         "targets": [
           {
             "expr": "sum(rate(http_requests_total[5m])) by (status)",
@@ -389,20 +418,27 @@
         },
         "options": {
           "tooltip": {
-            "mode": "single"
+            "mode": "single",
+            "sort": "none"
           },
           "legend": {
             "showLegend": true,
             "displayMode": "list",
-            "placement": "bottom"
+            "placement": "bottom",
+            "calcs": []
           }
         }
       },
       {
-        "id": 8,
-        "title": "HTTP Request Duration (95th percentile)",
+        "id": 9,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 25
+        },
         "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
+        "title": "HTTP Request Duration (95th percentile)",
         "targets": [
           {
             "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, method))",
@@ -420,20 +456,27 @@
         },
         "options": {
           "tooltip": {
-            "mode": "single"
+            "mode": "single",
+            "sort": "none"
           },
           "legend": {
             "showLegend": true,
             "displayMode": "list",
-            "placement": "bottom"
+            "placement": "bottom",
+            "calcs": []
           }
         }
       },
       {
-        "id": 9,
-        "title": "Active Connections",
+        "id": 10,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 25
+        },
         "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40},
+        "title": "Active Connections",
         "targets": [
           {
             "expr": "active_connections",
@@ -451,30 +494,37 @@
         },
         "options": {
           "tooltip": {
-            "mode": "single"
+            "mode": "single",
+            "sort": "none"
           },
           "legend": {
             "showLegend": true,
             "displayMode": "list",
-            "placement": "bottom"
+            "placement": "bottom",
+            "calcs": []
           }
         }
       },
       {
-        "id": 10,
-        "title": "HTTP Request Duration Histogram",
-        "type": "histogram",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48},
+        "id": 11,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 33
+        },
+        "type": "timeseries",
+        "title": "Database Size",
         "targets": [
           {
-            "expr": "http_request_duration_seconds_bucket",
-            "legendFormat": "{{method}} - {{endpoint}}",
+            "expr": "database_size_bytes",
+            "legendFormat": "Database Size",
             "refId": "A"
           }
         ],
         "fieldConfig": {
           "defaults": {
-            "unit": "s",
+            "unit": "bytes",
             "color": {
               "mode": "palette-classic"
             }
@@ -482,20 +532,27 @@
         },
         "options": {
           "tooltip": {
-            "mode": "single"
+            "mode": "single",
+            "sort": "none"
           },
           "legend": {
             "showLegend": true,
             "displayMode": "list",
-            "placement": "bottom"
+            "placement": "bottom",
+            "calcs": []
           }
         }
       },
       {
-        "id": 11,
-        "title": "Album, Article, and File Counts Over Time",
+        "id": 12,
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 33
+        },
         "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48},
+        "title": "Album, Article, and File Counts Over Time",
         "targets": [
           {
             "expr": "album_count",
@@ -523,12 +580,14 @@
         },
         "options": {
           "tooltip": {
-            "mode": "single"
+            "mode": "single",
+            "sort": "none"
           },
           "legend": {
             "showLegend": true,
             "displayMode": "list",
-            "placement": "bottom"
+            "placement": "bottom",
+            "calcs": []
           }
         }
       }
