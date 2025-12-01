@@ -210,9 +210,11 @@ class AuthManager:
             # Проверяем, есть ли у пользователя роли
             has_default_role = False
             if not user_roles:
-                # Если у пользователя нет ролей, не назначаем никакой роли по умолчанию
+                # Если у пользователя нет ролей, назначаем роль по умолчанию
+                user_roles = ['appviewer']  # Назначаем базовую роль по умолчанию
+                has_default_role = True
                 self.app.logger.info(
-                    f"User {user_info.get('preferred_username')} has no roles assigned")
+                    f"User {user_info.get('preferred_username')} assigned default role 'appviewer'")
 
             # Получаем пермишены пользователя
             user_permissions = self._get_user_permissions(user_roles)
@@ -225,6 +227,8 @@ class AuthManager:
                 'given_name': user_info.get('given_name', ''),
                 'family_name': user_info.get('family_name', ''),
                 'user_roles': user_roles,  # Только отфильтрованные роли
+                'display_roles': user_roles,  # Для совместимости с админ-панелью
+                'roles': user_roles,  # Для совместимости с админ-панелью
                 'user_permissions': list(user_permissions),  # Список пермишенов
                 'has_default_role': has_default_role  # Флаг, что роль назначена по умолчанию
             }
