@@ -207,33 +207,31 @@ class AuthManager:
             if client_id in resource_access:
                 client_roles = resource_access[client_id].get('roles', [])
             
-            # ДОПОЛНИТЕЛЬНАЯ ЛОГИКА: также проверяем realm_access для realm ролей
-            realm_access = decoded_token.get('realm_access', {})
-            realm_roles = realm_access.get('roles', [])
+            # ИСПОЛЬЗУЕМ ТОЛЬКО КЛИЕНТСКИЕ РОЛИ - НЕ БЕРЕМ РОЛИ ДОМЕНА (realm roles)
+            # realm_access = decoded_token.get('realm_access', {})
+            # realm_roles = realm_access.get('roles', [])
             
             # Проверяем также групповые роли, которые могут быть в поле 'groups'
-            groups = decoded_token.get('groups', [])
-            # Преобразуем группы в роли (если группы используются как роли)
-            group_roles = [group.lstrip('/') for group in groups]  # Убираем начальный слэш из названий групп
+            # groups = decoded_token.get('groups', [])
+            # # Преобразуем группы в роли (если группы используются как роли)
+            # group_roles = [group.lstrip('/') for group in groups]  # Убираем начальный слэш из названий групп
             
             # Проверяем возможные другие поля с ролями
-            other_roles = decoded_token.get('roles', [])  # Обычные роли
+            # other_roles = decoded_token.get('roles', [])  # Обычные роли
             
-            # Объединяем все роли
-            all_roles = list(set(client_roles + realm_roles + group_roles + other_roles))
+            # ИСПОЛЬЗУЕМ ТОЛЬКО КЛИЕНТСКИЕ РОЛИ
+            all_roles = list(set(client_roles))
             
             self.app.logger.info(f"Found client roles: {client_roles}")
-            self.app.logger.info(f"Found realm roles: {realm_roles}")
-            self.app.logger.info(f"Found group roles: {group_roles}")
-            self.app.logger.info(f"Found other roles: {other_roles}")
-            self.app.logger.info(f"Combined roles: {all_roles}")
+            # self.app.logger.info(f"Found realm roles: {realm_roles}")
+            # self.app.logger.info(f"Found group roles: {group_roles}")
+            # self.app.logger.info(f"Found other roles: {other_roles}")
+            self.app.logger.info(f"Using only client roles: {all_roles}")
             
             # ВАЖНО: Для корректного получения ролей в Keycloak:
             # 1. Необходимо включить scope 'roles' при аутентификации
             # 2. В настройках клиента в Keycloak должны быть настроены соответствующие мапперы:
-            #    - User Realm Role Mappings
-            #    - User Client Role Mappings  
-            #    - Group Membership (если используются группы как роли)
+            #    - User Client Role Mappings (только клиентские роли)
 
             # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
             user_roles = self._filter_user_roles(all_roles)
