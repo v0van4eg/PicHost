@@ -154,12 +154,12 @@
                 </div>
                 {% endif %}
 
-                <!-- Кнопка "Назад к загрузке" скрыта у пользователей без права UPLOAD_ZIP -->
-                <button class="btnmanage" id="backToUploadBtn"
-                        {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;" {% endif %}>
-                    <span>Назад к загрузке</span>
-                </button>
             </div>
+            <!-- Кнопка "Назад к загрузке" - всегда видима внизу карточки управления -->
+            <button class="btnmanage" id="backToUploadBtn"
+                    {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;" {% endif %}>
+                <span>Назад к загрузке</span>
+            </button>
         </div>
         <div class="column-right">
             <div class="card links-section">
