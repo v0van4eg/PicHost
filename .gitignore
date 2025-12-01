@@ -1,11 +1,1 @@
-.idea
-.venv
-images
-images/*
-thumbnails
-thumbnails/*
-postgres_data
-postgres_data/*
-source/__pycache__
-__pycache__
-.env
+Nothing should be ignored based on the provided file changes. The changes only include markdown and JSON files (GRAFANA_DASHBOARD_SETUP.md, grafana_dashboard_fixed.json, grafana_dashboard.json), which are source/config files and should be tracked in version control.
