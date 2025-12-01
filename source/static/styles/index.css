@@ -78,6 +78,121 @@ h1 {
     flex-direction: column;
 }
 
+/* Стили для панели вкладок */
+.tabs-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.tab {
+    background: #e9ecef;
+    color: #495057;
+    padding: 12px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #dee2e6;
+    font-size: 0.95rem;
+}
+
+.tab:hover {
+    background: #dde6f0;
+    border-color: #adb5bd;
+}
+
+.tab.active {
+    background: #3498db;
+    color: white;
+    border-color: #2980b9;
+}
+
+.tab-content {
+    display: none;
+    flex: 1;
+    min-height: 0; /* Allows flex items to shrink below their content */
+}
+
+.tab-content.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Стили для кнопки переключения вида */
+.btn-view-toggle {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 10px;
+}
+
+.btn-view-toggle:hover {
+    background: #5a6268;
+}
+
+/* Стили для списка в режиме плитки */
+.link-list.grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    padding: 16px;
+}
+
+.link-list.grid-view .link-item {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.link-list.grid-view .link-preview {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.link-list.grid-view .link-preview img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 6px;
+    align-self: center;
+}
+
+.link-list.grid-view .link-url {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.link-list.grid-view .link-url-input {
+    font-size: 0.75rem;
+    padding: 6px;
+}
+
+.link-list.grid-view .copy-btn {
+    margin-top: 8px;
+    width: 100%;
+}
+
+.link-list.grid-view .file-info {
+    font-size: 0.75rem;
+    margin-top: 6px;
+    word-break: break-word;
+}
+
 .column-right {
     flex: 1;
     min-width: 0;

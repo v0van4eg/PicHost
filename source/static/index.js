@@ -17,7 +17,7 @@ let droppedFile = null;
 let currentAlbumName = null;
 // DOM elements
 let dropArea, zipFileInput, browseBtn, uploadBtn, uploadForm, linkList, currentAlbumTitle, progressContainer, progressBar, progressText;
-let manageBtn, uploadCard, manageCard, backToUploadBtn;
+// Variables for tabs are handled separately
 // Новые элементы для селекторов
 let albumSelector, articleSelector;
 // Новые элементы для загрузки отдельных изображений
@@ -30,6 +30,10 @@ let createCSVBtn;
 let deleteAlbumBtn, deleteArticleBtn;
 // Элемент для оверлея загрузки
 let loadingOverlay;
+// Новые элементы для вкладок
+let tabs, tabContents;
+// Элемент для кнопки переключения вида
+let viewToggleBtn;
 // Глобальные переменные для статистики
 let statsInterval = null;
 
@@ -272,17 +276,7 @@ function updateUIForPermissions() {
         }
     }
 
-    // Управление карточкой управления
-    const manageBtn = document.getElementById('manageBtn');
-    if (manageBtn) {
-        // Показываем кнопку управления только если есть хотя бы одно из прав
-        const hasAnyManagementPermission = userPermissions.canManageAlbums ||
-                                         userPermissions.canManageArticles ||
-                                         userPermissions.canExport;
-        if (!hasAnyManagementPermission) {
-            manageBtn.style.display = 'none';
-        }
-    }
+    
 
     // Управление секцией просмотра файлов
     const linksSection = document.querySelector('.links-section');
@@ -295,18 +289,16 @@ function updateUIForPermissions() {
         `;
     }
 
-    // ОСНОВНОЕ ИЗМЕНЕНИЕ: Если пользователь не может загружать, но может просматривать - показываем управление сразу
+    // ОСНОВНОЕ ИЗМЕНЕНИЕ: Если пользователь не может загружать, но может просматривать - показываем вкладку управления
     if (!userPermissions.canUpload && userPermissions.canViewFiles) {
-        console.log('👀 User is viewer-only, showing management interface immediately');
+        console.log('👀 User is viewer-only, switching to management tab');
 
-        // Скрываем карточку загрузки и показываем управление
-        if (uploadCard) uploadCard.style.display = 'none';
-        if (manageCard) manageCard.style.display = 'flex';
-        if (backToUploadBtn) backToUploadBtn.style.display = 'none';
-        if (manageBtn) manageBtn.style.display = 'none'; // Скрываем кнопку перехода к управлению
-
-        // Загружаем альбомы сразу
+        // Переключаемся на вкладку управления
         setTimeout(() => {
+            if (tabs && tabContents) {
+                showTab('manage');
+            }
+            // Загружаем альбомы сразу
             loadAlbums().then(albums => {
                 if (albums && albums.length > 0) {
                     // Автоматически выбираем первый альбом и загружаем его файлы
@@ -375,10 +367,7 @@ function initializeElements() {
     uploadForm = document.getElementById('uploadForm');
     linkList = document.getElementById('linkList');
     currentAlbumTitle = document.getElementById('currentAlbumTitle');
-    manageBtn = document.getElementById('manageBtn');
-    uploadCard = document.getElementById('uploadCard');
-    manageCard = document.getElementById('manageCard');
-    backToUploadBtn = document.getElementById('backToUploadBtn');
+    
     progressContainer = document.getElementById('progressContainer');
     progressBar = document.getElementById('progressBar');
     progressText = document.getElementById('progressText');
@@ -408,6 +397,13 @@ function initializeElements() {
 
     // Новые элементы для экспорта CSV
     createCSVBtn = document.getElementById('createCSVBtn');
+
+    // Новые элементы для вкладок
+    tabs = document.querySelectorAll('.tab');
+    tabContents = document.querySelectorAll('.tab-content');
+    
+    // Элемент для кнопки переключения вида
+    viewToggleBtn = document.getElementById('viewToggleBtn');
 
     // Отладочная информация
     console.log('🔍 CSV Button element:', createCSVBtn);
@@ -1583,30 +1579,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    // --- Обработчик для кнопки "Управление ссылками" ---
-    if (manageBtn && uploadCard && manageCard) {
-        manageBtn.addEventListener('click', function() {
-            console.log("Кнопка 'Управление ссылками' нажата");
-            uploadCard.style.display = 'none';
-            manageCard.style.display = 'flex';
-            clearLinkList();
-            loadAlbums();
-        });
-    } else {
-        console.error('Элементы для переключения карточек не найдены');
-    }
-
-    // --- Обработчик для кнопки "Назад к загрузке" ---
-    if (backToUploadBtn && uploadCard && manageCard) {
-        backToUploadBtn.addEventListener('click', function() {
-            console.log("Кнопка 'Назад к загрузке' нажата");
-            uploadCard.style.display = 'flex';
-            manageCard.style.display = 'none';
-            clearLinkList();
-        });
-    } else {
-        console.error('Элементы для переключения карточек не найдены');
-    }
+    
 
     // --- Обработчик для кнопки CSV ---
     // ДОБАВЛЯЕМ ОБРАБОТЧИК ПОСЛЕ ИНИЦИАЛИЗАЦИИ ЭЛЕМЕНТОВ
@@ -1627,6 +1600,91 @@ document.addEventListener('DOMContentLoaded', function() {
     updateCreateXlsxButtonState();
     updateDeleteButtonsState();
 
+    // Инициализация вкладок
+    initTabs();
+    
+    // Инициализация кнопки переключения вида
+    initViewToggle();
+    
     // Добавляем очистку интервала при разгрузке страницы
     window.addEventListener('beforeunload', stopStatsAutoRefresh);
 });
+
+// --- Функция инициализации вкладок ---
+function initTabs() {
+    if (!tabs || !tabContents) {
+        console.error('Tab elements not found');
+        return;
+    }
+    
+    // Устанавливаем активную вкладку по умолчанию
+    let defaultTab = 'manage';
+    if (userPermissions.canUpload) {
+        defaultTab = 'zipUpload';
+    }
+    
+    // Показываем соответствующую вкладку
+    showTab(defaultTab);
+    
+    // Добавляем обработчики кликов для вкладок
+    tabs.forEach(tab => {
+        // Проверяем, что вкладка видима перед добавлением обработчика
+        if (!tab.style.display || tab.style.display !== 'none') {
+            tab.addEventListener('click', function() {
+                const tabName = this.getAttribute('data-tab');
+                showTab(tabName);
+            });
+        }
+    });
+}
+
+// --- Функция показа вкладки ---
+function showTab(tabName) {
+    // Скрываем все вкладки
+    tabContents.forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Убираем активный класс со всех табов
+    tabs.forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Показываем выбранную вкладку
+    const selectedContent = document.querySelector(`[data-tab="${tabName}"]`);
+    const selectedTab = document.querySelector(`[data-tab="${tabName}"].tab`);
+    
+    if (selectedContent) {
+        selectedContent.classList.add('active');
+    }
+    
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+}
+
+// --- Функция инициализации переключения вида ---
+function initViewToggle() {
+    if (!viewToggleBtn || !linkList) {
+        console.error('View toggle elements not found');
+        return;
+    }
+    
+    // Устанавливаем вид списка по умолчанию
+    linkList.classList.add('list-view');
+    let isGridView = false;
+    
+    viewToggleBtn.addEventListener('click', function() {
+        isGridView = !isGridView;
+        
+        if (isGridView) {
+            linkList.classList.remove('list-view');
+            linkList.classList.add('grid-view');
+            viewToggleBtn.innerHTML = '<span> список</span>';
+        } else {
+            linkList.classList.remove('grid-view');
+            linkList.classList.add('list-view');
+            viewToggleBtn.innerHTML = '<span> плитка</span>';
+        }
+    });
+}
