@@ -1,1 +1,15 @@
-Nothing should be ignored based on the provided file changes. The changes only include markdown and JSON files (GRAFANA_DASHBOARD_SETUP.md, grafana_dashboard_fixed.json, grafana_dashboard.json), which are source/config files and should be tracked in version control.
+```gitignore
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+*.env.*
+```
