@@ -34,10 +34,10 @@
         <div class="column-left">
             <!-- Карточка загрузки - показывается только если есть право UPLOAD_ZIP -->
             <div class="card" id="uploadCard"
-                 {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;" {% endif %}>
-                <h2>📤 Загрузка ZIP-архива</h2>
+                {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
+                <h2>📤 Загрузите ZIP-архив</h2>
                 <form id="uploadForm" enctype="multipart/form-data"
-                      {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;" {% endif %}>
+                      {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                     <div class="upload-area" id="dropArea">
                         <p>Перетащите ZIP-архив сюда</p>
                         <p>или</p>
@@ -46,9 +46,18 @@
                     </div>
 
                     <button type="submit" class="btn" id="uploadBtn" disabled
-                            {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;" {% endif %}>
+                            {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                         <span>Загрузить архив</span>
                     </button>
+
+                    {% if not has_permission(Permissions.UPLOAD_ZIP) %}
+                    <div style="text-align: center; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; margin-top: 10px;">
+                        <p style="margin: 0; color: #856404;">❌ У вас нет прав для загрузки файлов</p>
+                        <p style="margin: 5px 0 0 0; font-size: 0.9rem; color: #856404;">
+                            Обратитесь к администратору для получения прав
+                        </p>
+                    </div>
+                    {% endif %}
 
                     <div id="progressContainer">
                         <div id="progressBar">
@@ -56,77 +65,80 @@
                         </div>
                     </div>
                 </form>
-            </div>
-
-            <!-- Карточка загрузки отдельных изображений -->
-            <div id="uploadImageCard">
-                <h2>🖼️ Загрузка изображений</h2>
-                <form id="uploadImageForm" enctype="multipart/form-data">
-                    <div class="upload-area" id="imageDropArea">
-                        <p>Перетащите изображения сюда</p>
-                        <p>или</p>
-                        <button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>
-                        <input type="file" id="imageFile" name="image" accept="image/*" class="file-input" multiple>
-                    </div>
-
-                    <button type="submit" class="btn" id="uploadImageBtn" disabled>
-                        <span>Загрузить изображения</span>
-                    </button>
-
-                    <div id="imageProgressContainer" style="display: none;">
-                        <div id="imageProgressBar">
-                            <span id="imageProgressText">0%</span>
+                
+                <!-- Карточка загрузки отдельных изображений -->
+                <div class="card" id="uploadImageCard"
+                    {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
+                    <h2>🖼️ Загрузить отдельные изображения</h2>
+                    <form id="uploadImageForm" enctype="multipart/form-data">
+                        <div class="upload-area" id="imageDropArea">
+                            <p>Перетащите изображения сюда</p>
+                            <p>или</p>
+                            <button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>
+                            <input type="file" id="imageFile" name="image" accept="image/*" class="file-input" multiple>
                         </div>
-                    </div>
-                </form>
-            </div>
 
-            <button class="btnmanage" id="manageBtn">
-                <span>Управление ссылками</span>
-            </button>
+                        <button type="submit" class="btn" id="uploadImageBtn" disabled>
+                            <span>Загрузить изображения</span>
+                        </button>
+
+                        <div id="imageProgressContainer" style="display: none;">
+                            <div id="imageProgressBar">
+                                <span id="imageProgressText">0%</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <button class="btnmanage" id="manageBtn">
+                    <span>Управление ссылками</span>
+                </button>
+            </div>
 
             <!-- Карточка управления ссылками - показывается сразу если нет права UPLOAD_ZIP -->
             <div id="manageCard"
                  {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: flex;"
-                 {% else %}style="display: none;" {% endif %}>
-                <h2>Управление ссылками</h2>
-                <div class="manage-card-content">
-                    <div class="selector-group">
-                        <label class="selector-label" for="albumSelector">Выберите альбом:</label>
-                        <select id="albumSelector" class="selector">
-                            <option value="">-- Загрузка альбомов --</option>
-                        </select>
-                    </div>
-                    <div class="selector-group">
-                        <label class="selector-label" for="articleSelector">Выберите артикул:</label>
-                        <select id="articleSelector" class="selector" disabled>
-                            <option value="">-- Сначала выберите альбом --</option>
-                        </select>
-                    </div>
+                 {% else %}style="display: none;"{% endif %}>
+                <div class="card manage-content-card">
+                    <h2>Управление ссылками</h2>
+                    <div class="manage-card-content">
+                        <div class="selector-group">
+                            <label class="selector-label" for="albumSelector">Выберите альбом:</label>
+                            <select id="albumSelector" class="selector">
+                                <option value="">-- Загрузка альбомов --</option>
+                            </select>
+                        </div>
+                        <div class="selector-group">
+                            <label class="selector-label" for="articleSelector">Выберите артикул:</label>
+                            <select id="articleSelector" class="selector" disabled>
+                                <option value="">-- Сначала выберите альбом --</option>
+                            </select>
+                        </div>
 
-                    <!-- Контейнер для кнопок удаления - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВА НА УПРАВЛЕНИЕ -->
-                    {% if has_permission(Permissions.MANAGE_ALBUMS) or has_permission(Permissions.MANAGE_ARTICLES) %}
-                    <div id="deleteButtonsContainer" class="delete-buttons-container">
-                        <!-- Кнопки будут созданы динамически -->
-                    </div>
-                    {% endif %}
+                        <!-- Контейнер для кнопок удаления - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВА НА УПРАВЛЕНИЕ -->
+                        {% if has_permission(Permissions.MANAGE_ALBUMS) or has_permission(Permissions.MANAGE_ARTICLES) %}
+                        <div id="deleteButtonsContainer" class="delete-buttons-container">
+                            <!-- Кнопки будут созданы динамически -->
+                        </div>
+                        {% endif %}
 
-                    {% if has_permission(Permissions.EXPORT_DATA) %}
-                    <div class="selector-group">
-                        <button class="btn" id="createXlsxBtn" disabled>
-                            <span>📊 Создать документ XLSX</span>
-                        </button>
+                        {% if has_permission(Permissions.EXPORT_DATA) %}
+                        <div class="selector-group">
+                            <button class="btn" id="createXlsxBtn" disabled>
+                                <span>📊 Создать документ XLSX</span>
+                            </button>
+                        </div>
+                        <div class="selector-group">
+                            <button class="btn" id="createCSVBtn" disabled>
+                                <span>📊 Создать простой CSV</span>
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
-                    <div class="selector-group">
-                        <button class="btn" id="createCSVBtn" disabled>
-                            <span>📊 Создать простой CSV</span>
-                        </button>
-                    </div>
-                    {% endif %}
                 </div>
+                
                 <!-- Статистика - ТОЛЬКО ДЛЯ ТЕХ, У КОГО ЕСТЬ ПРАВО SYNC_DATABASE -->
                 {% if has_permission(Permissions.SYNC_DATABASE) %}
-                <div class="stats-card" id="statsCard">
+                <div class="card stats-card" id="statsCard">
                     <h3>📊 Статистика хранилища</h3>
                     <div class="stats-content">
                         <div class="stat-item">
@@ -153,7 +165,6 @@
                     </button>
                 </div>
                 {% endif %}
-
             </div>
             <!-- Кнопка "Назад к загрузке" - всегда видима внизу карточки управления -->
             <button class="btnmanage" id="backToUploadBtn"
