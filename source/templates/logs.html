@@ -2,118 +2,169 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Журнал Действий - Админ-панель</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles/logs.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <h1>Журнал Действий Пользователей</h1>
-        <a href="/admin" style="color: black; text-decoration: underline;">← Назад к админ-панели</a>
+        <div class="header-section">
+            <h1><i class="fas fa-clipboard-list"></i> Журнал Действий Пользователей</h1>
+            <a href="/admin" class="back-btn"><i class="fas fa-arrow-left"></i> Назад к админ-панели</a>
+        </div>
 
         <div class="filters">
-            <form method="GET">
-                <label for="search_user">Поиск по пользователю:</label>
-                <input type="text" id="search_user" name="search_user" value="{{ search_user or '' }}" placeholder="Имя пользователя...">
+            <form method="GET" class="filters-form">
+                <div class="filter-group">
+                    <label for="search_user"><i class="fas fa-user"></i> Поиск по пользователю:</label>
+                    <input type="text" id="search_user" name="search_user" value="{{ search_user or '' }}" placeholder="Имя пользователя, email...">
+                </div>
 
-                <label for="search_action">Тип действия:</label>
-                <select id="search_action" name="search_action">
-                    <option value="">Все действия</option>
-                    {% for action in available_actions %}
-                        <option value="{{ action }}" {% if search_action == action %}selected{% endif %}>{{ action }}</option>
-                    {% endfor %}
-                </select>
+                <div class="filter-group">
+                    <label for="search_action"><i class="fas fa-tasks"></i> Тип действия:</label>
+                    <select id="search_action" name="search_action">
+                        <option value="">Все действия</option>
+                        {% for action in available_actions %}
+                            <option value="{{ action }}" {% if search_action == action %}selected{% endif %}>{{ action }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-                <label for="date_from">Дата от:</label>
-                <input type="date" id="date_from" name="date_from" value="{{ date_from or '' }}">
+                <div class="filter-group">
+                    <label for="date_from"><i class="fas fa-calendar"></i> Дата от:</label>
+                    <input type="date" id="date_from" name="date_from" value="{{ date_from or '' }}">
+                </div>
 
-                <label for="date_to">Дата до:</label>
-                <input type="date" id="date_to" name="date_to" value="{{ date_to or '' }}">
+                <div class="filter-group">
+                    <label for="date_to"><i class="fas fa-calendar"></i> Дата до:</label>
+                    <input type="date" id="date_to" name="date_to" value="{{ date_to or '' }}">
+                </div>
 
-                <button type="submit">Применить фильтры</button>
-                <a href="{{ url_for('admin_logs') }}" style="margin-left: 10px; color: #6c757d;">Сбросить</a>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Применить фильтры</button>
+                    <a href="{{ url_for('admin_logs') }}" class="btn btn-secondary"><i class="fas fa-redo"></i> Сбросить</a>
+                </div>
             </form>
         </div>
 
-        <table class="log-table">
-            <thead>
-                <tr>
-                    <th class="time-column">Время</th>
-                    <th class="user-column">Пользователь</th>
-                    <th class="action-column">Действие</th>
-                    <th class="resource-column">Тип Ресурса</th>
-                    <th class="resource-column">Имя Ресурса</th>
-                    <th>Детали</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in logs %}
-                <tr>
-                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</td>
-                    <td><strong>{{ log.username }}</strong><br><small style="color: #666;">ID: {{ log.user_id[:8] if log.user_id else 'N/A' }}</small></td>
-                    <td>
-                        <span style="padding: 2px 6px; border-radius: 3px;
-                            {% if log.action == 'login' %}background: #d4edda; color: #155724;
-                            {% elif log.action == 'logout' %}background: #f8d7da; color: #721c24;
-                            {% elif log.action == 'upload' %}background: #cce7ff; color: #004085;
-                            {% else %}background: #e2e3e5; color: #383d41;{% endif %}">
-                            {{ log.action }}
-                        </span>
-                    </td>
-                    <td>{{ log.resource_type or '—' }}</td>
-                    <td>{{ log.resource_name or '—' }}</td>
-                    <td class="details">
-                        {% if log.details %}
-                            {% set details_dict = log.details %}
-                            {% if details_dict is string %}
-                                {{ details_dict }}
-                            {% else %}
-                                {% for key, value in details_dict.items() %}
-                                    {% if key == 'ip_address' %}
-                                        <strong>IP:</strong> {{ value }}<br>
-                                    {% elif key == 'album_name' %}
-                                        <strong>Альбом:</strong> {{ value }}<br>
-                                    {% elif key == 'original_filename' %}
-                                        <strong>Файл:</strong> {{ value }}<br>
-                                    {% elif key == 'email' %}
-                                        <strong>Email:</strong> {{ value }}<br>
-                                    {% elif key == 'given_name' %}
-                                        <strong>Имя:</strong> {{ value }}<br>
-                                    {% elif key == 'family_name' %}
-                                        <strong>Фамилия:</strong> {{ value }}<br>
-                                    {% else %}
-                                        <strong>{{ key }}:</strong> {{ value }}<br>
+        <div class="table-container">
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th class="time-column"><i class="fas fa-clock"></i> Время</th>
+                        <th class="user-column"><i class="fas fa-user"></i> Пользователь</th>
+                        <th class="action-column"><i class="fas fa-tasks"></i> Действие</th>
+                        <th class="resource-column"><i class="fas fa-folder"></i> Тип Ресурса</th>
+                        <th class="resource-column"><i class="fas fa-file"></i> Имя Ресурса</th>
+                        <th class="details-column"><i class="fas fa-info-circle"></i> Детали</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="time-cell">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</td>
+                        <td class="user-cell">
+                            <div class="user-info">
+                                <div class="user-name">
+                                    <i class="fas fa-user-circle"></i> 
+                                    <strong>{{ log.username or 'N/A' }}</strong>
+                                </div>
+                                {% if log.user_id %}
+                                    <div class="user-id">
+                                        <i class="fas fa-hashtag"></i> ID: {{ log.user_id[:8] if log.user_id else 'N/A' }}
+                                    </div>
+                                {% endif %}
+                                {% if log.details %}
+                                    {% set details_dict = log.details %}
+                                    {% if details_dict is mapping %}
+                                        {% if details_dict.email %}
+                                            <div class="user-email">
+                                                <i class="fas fa-envelope"></i> {{ details_dict.email }}
+                                            </div>
+                                        {% endif %}
+                                        {% if details_dict.given_name or details_dict.family_name %}
+                                            <div class="user-fullname">
+                                                <i class="fas fa-id-card"></i> 
+                                                {% if details_dict.given_name %}{{ details_dict.given_name }}{% endif %}
+                                                {% if details_dict.family_name %} {{ details_dict.family_name }}{% endif %}
+                                            </div>
+                                        {% endif %}
                                     {% endif %}
-                                {% endfor %}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="action-cell">
+                            <span class="action-badge 
+                                {% if log.action == 'login' %}action-login
+                                {% elif log.action == 'logout' or log.action == 'auto_logout' %}action-logout
+                                {% elif log.action == 'upload' %}action-upload
+                                {% elif log.action == 'delete_article' or log.action == 'delete_album' %}action-delete_article
+                                {% elif log.action == 'download' %}action-download
+                                {% else %}action-default{% endif %}">
+                                {{ log.action }}
+                            </span>
+                        </td>
+                        <td class="resource-type-cell">{{ log.resource_type or '—' }}</td>
+                        <td class="resource-name-cell">{{ log.resource_name or '—' }}</td>
+                        <td class="details-cell">
+                            {% if log.details %}
+                                {% set details_dict = log.details %}
+                                {% if details_dict is string %}
+                                    <div class="detail-item">
+                                        <span class="detail-key">Данные:</span>
+                                        <span class="detail-value">{{ details_dict }}</span>
+                                    </div>
+                                {% else %}
+                                    {% for key, value in details_dict.items() %}
+                                        {% if key not in ['email', 'given_name', 'family_name', 'ip_address'] %}
+                                            <div class="detail-item">
+                                                <span class="detail-key">{{ key }}:</span>
+                                                <span class="detail-value">{{ value }}</span>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if details_dict.ip_address %}
+                                        <div class="detail-item">
+                                            <span class="detail-key"><i class="fas fa-network-wired"></i> IP:</span>
+                                            <span class="detail-value">{{ details_dict.ip_address }}</span>
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+                            {% else %}
+                                —
                             {% endif %}
-                        {% else %}
-                            —
-                        {% endif %}
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 40px;">Нет записей журнала для отображения.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="no-data-cell">
+                            <i class="fas fa-inbox"></i>
+                            <p>Нет записей журнала для отображения.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
         <!-- Пагинация -->
         {% if total_count > per_page %}
         <div class="pagination">
             {% for p in range(1, (total_count // per_page) + 2) %}
                 {% if p == page %}
-                    <a href="#" class="active">{{ p }}</a>
+                    <a href="#" class="page-number active">{{ p }}</a>
                 {% else %}
                     <!-- Сохраняем параметры фильтрации при переходе по страницам -->
-                    <a href="{{ url_for('admin_logs', page=p, search_user=search_user, search_action=search_action, date_from=date_from, date_to=date_to) }}">{{ p }}</a>
+                    <a href="{{ url_for('admin_logs', page=p, search_user=search_user, search_action=search_action, date_from=date_from, date_to=date_to) }}" class="page-number">{{ p }}</a>
                 {% endif %}
             {% endfor %}
         </div>
         {% endif %}
 
-        <div style="margin-top: 20px; color: #6c757d; font-size: 0.9em;">
-            Всего записей: {{ total_count }}
+        <div class="stats-info">
+            <i class="fas fa-chart-bar"></i>
+            <span>Всего записей: {{ total_count }}</span>
         </div>
     </div>
 </body>
