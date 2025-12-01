@@ -94,10 +94,8 @@
                     </button>
                 </div>
 
-                <!-- Карточка управления ссылками - показывается сразу если нет права UPLOAD_ZIP -->
-                <div id="manageCard"
-                     {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: flex;"
-                     {% else %}style="display: none;"{% endif %}>
+                <!-- Карточка управления ссылками - изначально скрыта, отображение управляется через JavaScript -->
+                <div id="manageCard" style="display: none;">
                     <h2>Управление ссылками</h2>
                     <div class="manage-card-content">
                         <div class="selector-group">

@@ -278,9 +278,12 @@ function updateUIForPermissions() {
         // Показываем кнопку управления только если есть хотя бы одно из прав
         const hasAnyManagementPermission = userPermissions.canManageAlbums ||
                                          userPermissions.canManageArticles ||
-                                         userPermissions.canExport;
+                                         userPermissions.canExport ||
+                                         userPermissions.canViewFiles;  // Добавляем право на просмотр файлов
         if (!hasAnyManagementPermission) {
             manageBtn.style.display = 'none';
+        } else {
+            manageBtn.style.display = 'block';  // Убедимся, что кнопка отображается
         }
     }
 
@@ -294,6 +297,14 @@ function updateUIForPermissions() {
             </div>
         `;
     }
+    
+    // Управление кнопками экспорта
+    if (createXlsxBtn) {
+        createXlsxBtn.style.display = userPermissions.canExport ? 'block' : 'none';
+    }
+    if (createCSVBtn) {
+        createCSVBtn.style.display = userPermissions.canExport ? 'block' : 'none';
+    }
 
     // ОСНОВНОЕ ИЗМЕНЕНИЕ: Если пользователь не может загружать, но может просматривать - показываем управление сразу
     if (!userPermissions.canUpload && userPermissions.canViewFiles) {
@@ -303,7 +314,8 @@ function updateUIForPermissions() {
         if (uploadCard) uploadCard.style.display = 'none';
         if (manageCard) manageCard.style.display = 'flex';
         if (backToUploadBtn) backToUploadBtn.style.display = 'none';
-        if (manageBtn) manageBtn.style.display = 'none'; // Скрываем кнопку перехода к управлению
+        // Удаляем строку, которая скрывает кнопку управления, чтобы пользователь мог переключаться обратно
+        // if (manageBtn) manageBtn.style.display = 'none'; // Скрываем кнопку перехода к управлению
 
         // Загружаем альбомы сразу
         setTimeout(() => {
@@ -314,6 +326,9 @@ function updateUIForPermissions() {
                     loadArticles(albums[0]).then(() => {
                         showFilesForAlbum(albums[0]);
                     });
+                } else {
+                    // Если альбомов нет, все равно показываем карточку управления
+                    console.log('No albums found, but showing management interface');
                 }
             });
         }, 100);
@@ -1220,10 +1235,14 @@ function updateCreateCSVButtonState() {
 
 function updateCreateXlsxButtonState() {
     if (createXlsxBtn) {
-        createXlsxBtn.disabled = !albumSelector.value;
+        const hasAlbum = !!albumSelector.value;
+        createXlsxBtn.disabled = !hasAlbum;
+        createXlsxBtn.style.display = userPermissions.canExport ? 'block' : 'none';
     }
     if (createCSVBtn) {
-        createCSVBtn.disabled = !albumSelector.value;
+        const hasAlbum = !!albumSelector.value;
+        createCSVBtn.disabled = !hasAlbum;
+        createCSVBtn.style.display = userPermissions.canExport ? 'block' : 'none';
     }
 }
 
@@ -1591,6 +1610,8 @@ document.addEventListener('DOMContentLoaded', function() {
             manageCard.style.display = 'flex';
             clearLinkList();
             loadAlbums();
+            // Обновляем состояние кнопки удаления при показе карточки управления
+            updateDeleteButtonsState();
         });
     } else {
         console.error('Элементы для переключения карточек не найдены');
@@ -1603,16 +1624,22 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadCard.style.display = 'flex';
             manageCard.style.display = 'none';
             clearLinkList();
+            // Обновляем состояние кнопок экспорта при возврате к загрузке
+            updateCreateXlsxButtonState();
+            updateDeleteButtonsState();
         });
     } else {
         console.error('Элементы для переключения карточек не найдены');
     }
 
-    // --- Обработчик для кнопки CSV ---
-    // ДОБАВЛЯЕМ ОБРАБОТЧИК ПОСЛЕ ИНИЦИАЛИЗАЦИИ ЭЛЕМЕНТОВ
+    // --- Обработчики для кнопок экспорта ---
+    // ДОБАВЛЯЕМ ОБРАБОТЧИКИ ПОСЛЕ ИНИЦИАЛИЗАЦИИ ЭЛЕМЕНТОВ
     if (createCSVBtn) {
         console.log("✅ Adding event listener to CSV button");
         createCSVBtn.addEventListener('click', generateCSVFile);
+        // Обновляем состояние кнопки CSV при изменении селекторов
+        albumSelector.addEventListener('change', updateCreateXlsxButtonState);
+        articleSelector.addEventListener('change', updateCreateXlsxButtonState);
     } else {
         console.error("❌ CSV button not found during initialization");
     }
