@@ -1,10 +1,1 @@
-.idea
-.venv
-images
-images/*
-thumbnails
-thumbnails/*
-postgres_data
-postgres_data/*
-__pycache__
-.env
+(source/static/styles/logs.css, source/templates/logs.html)
