@@ -1,1 +1,96 @@
-Nothing should be ignored based on the provided file changes. The changes only include markdown and JSON files (GRAFANA_DASHBOARD_SETUP.md, grafana_dashboard_fixed.json, grafana_dashboard.json), which are source/config files and should be tracked in version control.
+```
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
+dist/
+build/
+target/
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+.pip/
+.conda/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+.eggs/
+
+# Build systems
+*.out
+*.exe
+*.dll
+*.so
+*.a
+*.class
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+
+# Cache directories
+.mypy_cache/
+.pytest_cache/
+.gradle/
+.cargo/
+.npm/
+.yarn/
+.bazel/
+.julia/
+.zig/
+```
