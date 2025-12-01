@@ -208,7 +208,7 @@ def init_db():
 
 
 # Оптимизированное получение альбомов
-def update_metrics():
+def update_metrics(start_time=None):
     """Обновление метрик на основе текущего состояния системы"""
     try:
         # Обновление числа альбомов
@@ -266,8 +266,12 @@ def update_metrics():
             db_size_bytes = db_size_result[0]['db_size']
             DB_SIZE.set(db_size_bytes)
 
-        # Обновление времени работы приложения
-        uptime = (datetime.now() - app.start_time).total_seconds()
+        # Обновление времени работы приложения, если передано время запуска
+        if start_time:
+            uptime = (datetime.now() - start_time).total_seconds()
+        else:
+            # Use app.start_time as fallback
+            uptime = (datetime.now() - app.start_time).total_seconds()
         UPTIME.set(uptime)
 
         # Обновление числа активных подключений (примерное значение)
