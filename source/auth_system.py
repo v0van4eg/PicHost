@@ -206,14 +206,11 @@ class AuthManager:
             # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
             user_roles = self._filter_user_roles(client_roles)
 
-            # НОВАЯ ЛОГИКА: если у пользователя нет ролей, назначаем appviewer по умолчанию
+            # Если у пользователя нет ролей из Keycloak, оставляем пустой список
             has_default_role = False
             if not user_roles:
-                # Назначаем роль по умолчанию
-                user_roles = ['appviewer']
-                has_default_role = True
                 self.app.logger.info(
-                    f"User {user_info.get('preferred_username')} has no roles, assigned default role: appviewer")
+                    f"User {user_info.get('preferred_username')} has no roles from Keycloak, proceeding without roles")
 
             # Получаем пермишены пользователя
             user_permissions = self._get_user_permissions(user_roles)
@@ -409,4 +406,6 @@ def auth_context_processor():
         'user_permissions': user_permissions,
         'has_permission': lambda perm: perm in user_permissions,
         'Permissions': Permissions,
+        'is_appviewer_by_default': user.get('has_default_role', False) if user else False,
+        'has_default_role': user.get('has_default_role', False) if user else False,
     }
