@@ -6,5 +6,6 @@ thumbnails
 thumbnails/*
 postgres_data
 postgres_data/*
+source/__pycache__
 __pycache__
 .env
