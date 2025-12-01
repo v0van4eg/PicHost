@@ -30,6 +30,10 @@ let createCSVBtn;
 let deleteAlbumBtn, deleteArticleBtn;
 // Элемент для оверлея загрузки
 let loadingOverlay;
+// Новые элементы для вкладок
+let tabs, tabContents;
+// Элемент для кнопки переключения вида
+let viewToggleBtn;
 // Глобальные переменные для статистики
 let statsInterval = null;
 
@@ -408,6 +412,13 @@ function initializeElements() {
 
     // Новые элементы для экспорта CSV
     createCSVBtn = document.getElementById('createCSVBtn');
+
+    // Новые элементы для вкладок
+    tabs = document.querySelectorAll('.tab');
+    tabContents = document.querySelectorAll('.tab-content');
+    
+    // Элемент для кнопки переключения вида
+    viewToggleBtn = document.getElementById('viewToggleBtn');
 
     // Отладочная информация
     console.log('🔍 CSV Button element:', createCSVBtn);
@@ -1627,6 +1638,91 @@ document.addEventListener('DOMContentLoaded', function() {
     updateCreateXlsxButtonState();
     updateDeleteButtonsState();
 
+    // Инициализация вкладок
+    initTabs();
+    
+    // Инициализация кнопки переключения вида
+    initViewToggle();
+    
     // Добавляем очистку интервала при разгрузке страницы
     window.addEventListener('beforeunload', stopStatsAutoRefresh);
 });
+
+// --- Функция инициализации вкладок ---
+function initTabs() {
+    if (!tabs || !tabContents) {
+        console.error('Tab elements not found');
+        return;
+    }
+    
+    // Устанавливаем активную вкладку по умолчанию
+    let defaultTab = 'manage';
+    if (userPermissions.canUpload) {
+        defaultTab = 'zipUpload';
+    }
+    
+    // Показываем соответствующую вкладку
+    showTab(defaultTab);
+    
+    // Добавляем обработчики кликов для вкладок
+    tabs.forEach(tab => {
+        // Проверяем, что вкладка видима перед добавлением обработчика
+        if (!tab.style.display || tab.style.display !== 'none') {
+            tab.addEventListener('click', function() {
+                const tabName = this.getAttribute('data-tab');
+                showTab(tabName);
+            });
+        }
+    });
+}
+
+// --- Функция показа вкладки ---
+function showTab(tabName) {
+    // Скрываем все вкладки
+    tabContents.forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Убираем активный класс со всех табов
+    tabs.forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Показываем выбранную вкладку
+    const selectedContent = document.querySelector(`[data-tab="${tabName}"]`);
+    const selectedTab = document.querySelector(`[data-tab="${tabName}"].tab`);
+    
+    if (selectedContent) {
+        selectedContent.classList.add('active');
+    }
+    
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+}
+
+// --- Функция инициализации переключения вида ---
+function initViewToggle() {
+    if (!viewToggleBtn || !linkList) {
+        console.error('View toggle elements not found');
+        return;
+    }
+    
+    // Устанавливаем вид списка по умолчанию
+    linkList.classList.add('list-view');
+    let isGridView = false;
+    
+    viewToggleBtn.addEventListener('click', function() {
+        isGridView = !isGridView;
+        
+        if (isGridView) {
+            linkList.classList.remove('list-view');
+            linkList.classList.add('grid-view');
+            viewToggleBtn.innerHTML = '<span> список</span>';
+        } else {
+            linkList.classList.remove('grid-view');
+            linkList.classList.add('list-view');
+            viewToggleBtn.innerHTML = '<span> плитка</span>';
+        }
+    });
+}
