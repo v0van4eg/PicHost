@@ -68,7 +68,7 @@
                     
                     <!-- Карточка загрузки отдельных изображений -->
                     <hr>
-                    <div id="uploadImageCard">
+                    <div id="uploadImageCard" {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                         <h2>🖼️ Загрузить отдельные изображения</h2>
                         <form id="uploadImageForm" enctype="multipart/form-data">
                             <div class="upload-area" id="imageDropArea">
