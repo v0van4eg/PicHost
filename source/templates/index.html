@@ -32,8 +32,24 @@
         </header>
         <div class="columns">
             <div class="column-left">
-                <!-- Карточка загрузки - показывается только если есть право UPLOAD_ZIP -->
-                <div class="card" id="uploadCard"
+                <!-- Панель навигации слева -->
+                <div class="tabs-panel">
+                    <div class="tab" id="zipUploadTab" data-tab="zipUpload"
+                         {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
+                        <span>📤 ZIP-архив</span>
+                    </div>
+                    <div class="tab" id="imageUploadTab" data-tab="imageUpload"
+                         {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
+                        <span>🖼️ Отдельные изображения</span>
+                    </div>
+                    <div class="tab" id="manageTab" data-tab="manage">
+                        <span>🔗 Управление</span>
+                    </div>
+                </div>
+
+                <!-- Карточка загрузки ZIP-архивов -->
+                <div class="card tab-content" id="zipUploadContent"
+                     data-tab="zipUpload"
                      {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
                     <h2>📤 Загрузите ZIP-архив</h2>
                     <form id="uploadForm" enctype="multipart/form-data"
@@ -65,40 +81,39 @@
                             </div>
                         </div>
                     </form>
-                    
-                    <!-- Карточка загрузки отдельных изображений -->
-                    <hr>
-                    <div id="uploadImageCard">
-                        <h2>🖼️ Загрузить отдельные изображения</h2>
-                        <form id="uploadImageForm" enctype="multipart/form-data">
-                            <div class="upload-area" id="imageDropArea">
-                                <p>Перетащите изображения сюда</p>
-                                <p>или</p>
-                                <button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>
-                                <input type="file" id="imageFile" name="image" accept="image/*" class="file-input" multiple>
-                            </div>
-
-                            <button type="submit" class="btn" id="uploadImageBtn" disabled>
-                                <span>Загрузить изображения</span>
-                            </button>
-
-                            <div id="imageProgressContainer" style="display: none;">
-                                <div id="imageProgressBar">
-                                    <span id="imageProgressText">0%</span>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <button class="btnmanage" id="manageBtn">
-                        <span>Управление ссылками</span>
-                    </button>
                 </div>
 
-                <!-- Карточка управления ссылками - показывается сразу если нет права UPLOAD_ZIP -->
-                <div id="manageCard"
+                <!-- Карточка загрузки отдельных изображений -->
+                <div class="card tab-content" id="imageUploadContent"
+                     data-tab="imageUpload"
+                     {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
+                    <h2>🖼️ Загрузить отдельные изображения</h2>
+                    <form id="uploadImageForm" enctype="multipart/form-data">
+                        <div class="upload-area" id="imageDropArea">
+                            <p>Перетащите изображения сюда</p>
+                            <p>или</p>
+                            <button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>
+                            <input type="file" id="imageFile" name="image" accept="image/*" class="file-input" multiple>
+                        </div>
+
+                        <button type="submit" class="btn" id="uploadImageBtn" disabled>
+                            <span>Загрузить изображения</span>
+                        </button>
+
+                        <div id="imageProgressContainer" style="display: none;">
+                            <div id="imageProgressBar">
+                                <span id="imageProgressText">0%</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Карточка управления ссылками -->
+                <div class="card tab-content" id="manageContent"
+                     data-tab="manage"
                      {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: flex;"
                      {% else %}style="display: none;"{% endif %}>
-                    <h2>Управление ссылками</h2>
+                    <h2>🔗 Управление ссылками</h2>
                     <div class="manage-card-content">
                         <div class="selector-group">
                             <label class="selector-label" for="albumSelector">Выберите альбом:</label>
@@ -161,12 +176,6 @@
                         </button>
                     </div>
                     {% endif %}
-
-                    <!-- Кнопка "Назад к загрузке" скрыта у пользователей без права UPLOAD_ZIP -->
-                    <button class="btnmanage" id="backToUploadBtn"
-                        {% if not has_permission(Permissions.UPLOAD_ZIP) %}style="display: none;"{% endif %}>
-                        <span>Назад к загрузке</span>
-                    </button>
                 </div>
             </div>
             <div class="column-right">
@@ -179,6 +188,9 @@
                                 ❌ Нет прав для просмотра файлов
                             {% endif %}
                         </span>
+                        <button id="viewToggleBtn" class="btn-view-toggle" title="Переключить вид">
+                            <span> плитка</span>
+                        </button>
                     </h2>
                     <ul id="linkList" class="link-list">
                         {% if has_permission(Permissions.VIEW_FILES) %}
