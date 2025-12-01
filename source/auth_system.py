@@ -118,6 +118,7 @@ class AuthManager:
 
     def _filter_user_roles(self, all_roles):
         """Фильтрует роли, оставляя только разрешенные"""
+        self.app.logger.info(f"Filtering roles: {all_roles} (allowed: {self.allowed_roles})")
         user_roles = []
         for role in all_roles:
             if role in self.allowed_roles:
@@ -199,10 +200,19 @@ class AuthManager:
             resource_access = decoded_token.get('resource_access', {})
             client_roles = []
 
+            # Отладочная информация
+            self.app.logger.info(f"Resource access from token: {list(resource_access.keys()) if resource_access else 'No resource_access'}")
+            if resource_access:
+                for resource, details in resource_access.items():
+                    self.app.logger.info(f"Resource '{resource}' has keys: {list(details.keys())}")
+
             # Получаем роли клиента
             client_id = self.keycloak.client_id
             if client_id in resource_access:
                 client_roles = resource_access[client_id].get('roles', [])
+                self.app.logger.info(f"Client roles found: {client_roles}")
+            else:
+                self.app.logger.info(f"No roles found for client_id '{client_id}'. Available resources: {list(resource_access.keys())}")
 
             # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
             user_roles = self._filter_user_roles(client_roles)
@@ -308,6 +318,45 @@ class AuthManager:
 
     def _create_logout_url(self, post_logout_redirect_uri, id_token=None):
         """Создает URL для выхода из Keycloak"""
+
+
+# Добавляем отладочный эндпоинт для проверки JWT токена (временно, для диагностики)
+def debug_token_endpoint(app, auth_manager):
+    @app.route('/debug/token-info')
+    def token_info():
+        """Отладочный эндпоинт для просмотра содержимого токена"""
+        if 'user' not in session:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        user = session['user']
+        token = user.get('access_token')  # если токен сохранен
+        
+        # Попробуем получить токен из сессии OAuth если он там есть
+        from flask import g
+        try:
+            # Получаем последний токен из OAuth сессии
+            token_data = session.get('_oauth_token_data', {})
+            if token_data:
+                access_token = token_data.get('access_token')
+                if access_token:
+                    decoded = auth_manager._decode_jwt_payload(access_token)
+                    return jsonify({
+                        'session_user_info': user,
+                        'decoded_token': decoded,
+                        'resource_access': decoded.get('resource_access', {}),
+                        'client_id': auth_manager.keycloak.client_id if auth_manager.keycloak else 'N/A'
+                    })
+        except Exception as e:
+            app.logger.error(f"Error getting token info: {e}")
+        
+        return jsonify({
+            'session_user_info': user,
+            'message': 'Access token not found in session or decode failed',
+            'available_keys_in_user': list(user.keys()) if user else []
+        })
+
+    def _create_logout_url(self, post_logout_redirect_uri, id_token=None):
+        """Создает URL для выхода из Keycloak"""
         try:
             # Извлекаем базовый URL из metadata
             metadata = self.keycloak.load_server_metadata()
@@ -403,13 +452,45 @@ def auth_context_processor():
 
     # Получаем все пермишены пользователя
     user_permissions = user.get('user_permissions', []) if user else []
+    
+    # Получаем роли пользователя для отладки
+    user_roles = get_user_roles()
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Auth context processor - user authenticated: {is_auth}, user roles: {user_roles}")
 
     return {
         'current_user': user,
         'is_authenticated': is_auth,
         'user_has_role': user_has_role,
-        'user_roles': get_user_roles(),
+        'user_roles': user_roles,
         'user_permissions': user_permissions,
         'has_permission': lambda perm: perm in user_permissions,
         'Permissions': Permissions,
     }
+
+
+# Добавляем отладочный эндпоинт для проверки JWT токена (временно, для диагностики)
+def debug_token_endpoint(app, auth_manager):
+    @app.route('/debug/token-info')
+    def token_info():
+        """Отладочный эндпоинт для просмотра содержимого токена"""
+        if 'user' not in session:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        user = session['user']
+        # В OAuth callback токен не сохраняется в сессии, но мы можем получить его через другие способы
+        # Попробуем получить токен из OAuth сессии, если он был сохранен
+        
+        return jsonify({
+            'session_user_info': {
+                'name': user.get('name'),
+                'email': user.get('email'),
+                'sub': user.get('sub'),
+                'user_roles': user.get('user_roles', []),
+                'display_roles': user.get('display_roles', []),
+                'roles': user.get('roles', []),
+                'available_keys': list(user.keys())
+            },
+            'message': 'Token info - actual token not stored in session for security, but roles were extracted during login'
+        })

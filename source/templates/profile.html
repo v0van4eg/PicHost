@@ -37,6 +37,18 @@
                     <p>Нет назначенных ролей</p>
                 {% endif %}
             </div>
+            
+            <!-- Отладочная информация о ролях -->
+            <details style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                <summary style="cursor: pointer; font-weight: bold; color: #495057;">Диагностика ролей (нажмите для просмотра)</summary>
+                <div style="margin-top: 10px; font-size: 0.9em;">
+                    <p><strong>user_roles (из сессии):</strong> {{ user_roles|join(', ') or 'пусто' }}</p>
+                    <p><strong>user_roles из контекста ({{ user_roles.__class__.__name__ }}):</strong> {{ user_roles|join(', ') or 'пусто' }}</p>
+                    <p><strong>current_user.roles (из сессии):</strong> {{ current_user.roles|join(', ') or 'пусто' }}</p>
+                    <p><strong>current_user.user_roles (из сессии):</strong> {{ current_user.user_roles|join(', ') or 'пусто' }}</p>
+                    <p><strong>current_user.display_roles (из сессии):</strong> {{ current_user.display_roles|join(', ') or 'пусто' }}</p>
+                </div>
+            </details>
             <!-- Тут будет информация о правах доступа -->
             <div class="role-info" style="margin-top: 15px; padding: 10px; background: #e8f4fd; border-radius: 6px; border-left: 4px solid #3498db;">
                 <h3 style="margin-top: 0; color: #2c3e50;">Информация о правах доступа</h3>

@@ -21,7 +21,7 @@ from prometheus_client.exposition import choose_encoder
 import prometheus_client
 
 from auth_system import AuthManager, permission_required, auth_context_processor, \
-    is_authenticated, get_current_user, Permissions, ROLE_PERMISSIONS
+    is_authenticated, get_current_user, Permissions, ROLE_PERMISSIONS, debug_token_endpoint
 from database import db_manager as db_manager
 from document_generator import init_document_generator, get_document_generator
 from sync_manager import SyncManager
@@ -106,6 +106,9 @@ app.config['auth_manager'] = auth_manager
 
 # Регистрация маршрутов аутентификации
 auth_manager.register_routes()
+
+# Регистрация отладочного эндпоинта
+debug_token_endpoint(app, auth_manager)
 
 # Добавление контекстного процессора
 app.context_processor(auth_context_processor)
@@ -1148,6 +1151,32 @@ def api_my_roles():
         return jsonify(user_roles)
     except Exception as e:
         logger.error(f"Error getting user roles: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/user-info')
+@permission_required(Permissions.VIEW_ALBUMS)  # Любой аутентифицированный пользователь может получить информацию о себе
+def api_user_info():
+    """Возвращает полную информацию о текущем пользователе для диагностики"""
+    try:
+        user = session.get('user', {})
+        # Возвращаем все поля, связанные с ролями и информацией о пользователе
+        user_info = {
+            'name': user.get('name'),
+            'email': user.get('email'),
+            'sub': user.get('sub'),
+            'given_name': user.get('given_name'),
+            'family_name': user.get('family_name'),
+            'user_roles': user.get('user_roles', []),
+            'display_roles': user.get('display_roles', []),
+            'roles': user.get('roles', []),
+            'user_permissions': user.get('user_permissions', []),
+            'has_default_role': user.get('has_default_role', False),
+            'all_session_keys': list(session.get('user', {}).keys()) if session.get('user') else []
+        }
+        return jsonify(user_info)
+    except Exception as e:
+        logger.error(f"Error getting user info: {e}")
         return jsonify({'error': str(e)}), 500
 
 

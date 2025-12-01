@@ -99,6 +99,26 @@
                         <p>Полное имя: <span>{{ (current_user.given_name ~ ' ' ~ current_user.family_name).strip() if current_user.given_name or current_user.family_name else 'Не указано' }}</span></p>
                         <p>Email: <span>{{ current_user.email if current_user else 'N/A' }}</span></p>
                         <p>ID: <span>{{ current_user.sub if current_user else 'N/A' }}</span></p>
+                        <p>Роли: 
+                            <span>
+                                {% if display_roles %}
+                                    {{ display_roles|join(', ') }}
+                                {% else %}
+                                    Нет назначенных ролей
+                                {% endif %}
+                            </span>
+                        </p>
+                        <!-- Отладочная информация о ролях -->
+                        <details style="margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 0.85em;">
+                            <summary style="cursor: pointer; color: #6c757d;">Диагностика ролей</summary>
+                            <div style="margin-top: 5px;">
+                                <p style="margin: 3px 0;"><strong>display_roles:</strong> {{ display_roles|join(', ') or 'пусто' }}</p>
+                                <p style="margin: 3px 0;"><strong>all_roles:</strong> {{ all_roles|join(', ') or 'пусто' }}</p>
+                                <p style="margin: 3px 0;"><strong>current_user.roles:</strong> {{ current_user.roles|join(', ') or 'пусто' }}</p>
+                                <p style="margin: 3px 0;"><strong>current_user.user_roles:</strong> {{ current_user.user_roles|join(', ') or 'пусто' }}</p>
+                                <p style="margin: 3px 0;"><strong>current_user.display_roles:</strong> {{ current_user.display_roles|join(', ') or 'пусто' }}</p>
+                            </div>
+                        </details>
                     </div>
                 </div>
             </div>
