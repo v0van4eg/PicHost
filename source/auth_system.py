@@ -204,8 +204,27 @@ class AuthManager:
 
             # Получаем роли клиента
             client_id = self.keycloak.client_id
+            self.app.logger.debug(f"Expected client_id: {client_id}")
+            self.app.logger.debug(f"Resource access structure: {resource_access}")
+            
+            # Ищем роли для нашего клиента в resource_access
             if client_id in resource_access:
                 client_roles = resource_access[client_id].get('roles', [])
+            
+            # Также проверяем конкретно 'pichost' клиента, который может содержать наши роли
+            if not client_roles and 'pichost' in resource_access:
+                client_roles = resource_access['pichost'].get('roles', [])
+                self.app.logger.debug(f"Found roles in pichost client: {client_roles}")
+            
+            # Проверяем другие возможные клиенты, если не нашли в основном
+            if not client_roles:
+                for resource_name, resource_data in resource_access.items():
+                    if resource_name != 'account':  # Пропускаем стандартный account client
+                        roles = resource_data.get('roles', [])
+                        if roles:
+                            client_roles = roles
+                            self.app.logger.debug(f"Found roles in {resource_name} client: {roles}")
+                            break
             
             # ИСПОЛЬЗУЕМ ТОЛЬКО КЛИЕНТСКИЕ РОЛИ - НЕ БЕРЕМ РОЛИ ДОМЕНА (realm roles)
             # realm_access = decoded_token.get('realm_access', {})
