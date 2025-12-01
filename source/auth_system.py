@@ -207,14 +207,12 @@ class AuthManager:
             # ФИЛЬТРАЦИЯ РОЛЕЙ: оставляем только разрешенные роли
             user_roles = self._filter_user_roles(client_roles)
 
-            # НОВАЯ ЛОГИКА: если у пользователя нет ролей, назначаем appviewer по умолчанию
+            # Проверяем, есть ли у пользователя роли
             has_default_role = False
             if not user_roles:
-                # Назначаем роль по умолчанию
-                user_roles = ['appviewer']
-                has_default_role = True
+                # Если у пользователя нет ролей, не назначаем никакой роли по умолчанию
                 self.app.logger.info(
-                    f"User {user_info.get('preferred_username')} has no roles, assigned default role: appviewer")
+                    f"User {user_info.get('preferred_username')} has no roles assigned")
 
             # Получаем пермишены пользователя
             user_permissions = self._get_user_permissions(user_roles)
