@@ -21,6 +21,21 @@ PicHost --- веб‑приложение на Flask для хранения, к
     cp env.example .env
     docker-compose up -d --build
 
+## Настройка Keycloak
+
+Для корректной работы с ролями в Keycloak необходимо:
+
+1. Создать клиент OAuth2 в Keycloak
+2. В настройках клиента:
+   - Установить `Access Type` в `confidential`
+   - В `Valid Redirect URIs` добавить URL вашего приложения: `http://ваш_домен/auth/callback`
+   - В `Client Protocol` выбрать `openid-connect`
+3. В разделе `Client Scopes` убедиться, что scope `roles` включен
+4. В `Mappers` добавить следующие мапперы:
+   - `User Realm Role Mappings` - для получения ролей realm
+   - `User Client Role Mappings` - для получения ролей клиента
+   - `Group Membership` - для получения групп пользователя (если используются как роли)
+
 ## API
 
 -   GET /api/albums\
