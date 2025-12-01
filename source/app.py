@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Импорты для Prometheus
-from prometheus_client import Counter, Gauge, Histogram, Summary, generate_latest, CollectorRegistry, multiprocess
+from prometheus_client import Gauge, generate_latest, CollectorRegistry, multiprocess
 from prometheus_client.exposition import choose_encoder
 import prometheus_client
 
@@ -28,6 +28,7 @@ from sync_manager import SyncManager
 # Модули приложения
 from utils import cleanup_album_thumbnails, log_user_action
 from zip_processor import ZipProcessor
+from metrics import update_metrics, ACTIVE_CONNECTIONS, ALBUM_COUNT, ARTICLE_COUNT, FILE_COUNT, DISK_USAGE_TOTAL, DISK_USAGE_FREE, DISK_USAGE_USED, DB_SIZE, UPTIME
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -36,66 +37,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 # Добавить в начало app.py для отслеживания времени запуска
 app.start_time = datetime.now()
 
-# Определение метрик Prometheus
-REQUEST_COUNT = Counter(
-    'http_requests_total', 
-    'Total HTTP requests', 
-    ['method', 'endpoint', 'status']
-)
-
-REQUEST_DURATION = Histogram(
-    'http_request_duration_seconds', 
-    'HTTP request duration in seconds', 
-    ['method', 'endpoint']
-)
-
-ACTIVE_CONNECTIONS = Gauge(
-    'active_connections', 
-    'Number of active connections'
-)
-
-ALBUM_COUNT = Gauge(
-    'album_count', 
-    'Number of albums'
-)
-
-ARTICLE_COUNT = Gauge(
-    'article_count', 
-    'Number of articles'
-)
-
-FILE_COUNT = Gauge(
-    'file_count', 
-    'Number of files'
-)
-
-DISK_USAGE_TOTAL = Gauge(
-    'disk_usage_bytes_total', 
-    'Total disk space in bytes',
-    ['path']
-)
-
-DISK_USAGE_FREE = Gauge(
-    'disk_usage_bytes_free', 
-    'Free disk space in bytes',
-    ['path']
-)
-
-DISK_USAGE_USED = Gauge(
-    'disk_usage_bytes_used', 
-    'Used disk space in bytes',
-    ['path']
-)
-
-DB_SIZE = Gauge(
-    'database_size_bytes', 
-    'Database size in bytes'
-)
-
-UPTIME = Gauge(
-    'application_uptime_seconds', 
-    'Application uptime in seconds'
-)
+# Остальные метрики импортируются из модуля metrics
 
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
@@ -336,31 +278,6 @@ def update_metrics():
         logger.error(f"Error updating metrics: {e}")
 
 
-# Middleware для подсчета запросов и времени выполнения
-@app.before_request
-def before_request():
-    request.start_time = time.time()
-
-
-@app.after_request
-def after_request(response):
-    # Обновляем счетчики метрик
-    REQUEST_COUNT.labels(
-        method=request.method,
-        endpoint=request.endpoint or request.path,
-        status=response.status_code
-    ).inc()
-
-    if hasattr(request, 'start_time'):
-        duration = time.time() - request.start_time
-        REQUEST_DURATION.labels(
-            method=request.method,
-            endpoint=request.endpoint or request.path
-        ).observe(duration)
-
-    return response
-
-
 # Оптимизированное получение альбомов
 def get_albums():
     # Используем составной индекс idx_files_album_article
@@ -530,7 +447,7 @@ def api_stats():
 def prometheus_metrics():
     """Возвращает метрики в формате Prometheus"""
     # Обновляем метрики перед отправкой
-    update_metrics()
+    update_metrics(app.start_time)
     
     # Генерируем и возвращаем метрики
     registry = prometheus_client.REGISTRY
@@ -1308,7 +1225,7 @@ def start_metrics_updater():
     def update_loop():
         while True:
             try:
-                update_metrics()
+                update_metrics(app.start_time)
                 time.sleep(30)  # Обновляем метрики каждые 30 секунд
             except Exception as e:
                 logger.error(f"Error in metrics update loop: {e}")
