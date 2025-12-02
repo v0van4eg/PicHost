@@ -1,10 +1,87 @@
-.idea
-.venv
-images
-images/*
-thumbnails
-thumbnails/*
-postgres_data
-postgres_data/*
-__pycache__
+```gitignore
+# Configuration and dashboard files
+*.json
+*.yml
+*.yaml
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# Environment files
 .env
+.env.local
+*.env.*
+
+# Editors and IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+target/
+.venv/
+venv/
+.env/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+
+# System files
+.DS_Store
+Thumbs.db
+*.DS_Store
+.DS_Store?
+._.DS_Store
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Icon?
+iTunes_Control/
+Network Trash Folder/
+Temporary Items/
+VolumeIcon.icns
+*.nib
+*.lproj/
+*.app/
+*.dmg
+*.pkg
+*.mpkg
+*.app.zip
+*.zip
+*.tar
+*.gz
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```
