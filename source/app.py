@@ -12,7 +12,13 @@ from datetime import datetime
 
 from PIL import Image
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
+from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+# Импорты для Prometheus
+from prometheus_client import Gauge, generate_latest, CollectorRegistry, multiprocess
+from prometheus_client.exposition import choose_encoder
+import prometheus_client
 
 from auth_system import AuthManager, permission_required, auth_context_processor, \
     is_authenticated, get_current_user, Permissions
@@ -22,6 +28,7 @@ from sync_manager import SyncManager
 # Модули приложения
 from utils import cleanup_album_thumbnails, log_user_action
 from zip_processor import ZipProcessor
+from metrics import update_metrics, ACTIVE_CONNECTIONS, ALBUM_COUNT, ARTICLE_COUNT, FILE_COUNT, DISK_USAGE_TOTAL, DISK_USAGE_FREE, DISK_USAGE_USED, DB_SIZE, UPTIME
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -29,6 +36,8 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Добавить в начало app.py для отслеживания времени запуска
 app.start_time = datetime.now()
+
+# Остальные метрики импортируются из модуля metrics
 
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
@@ -199,6 +208,9 @@ def init_db():
 
 
 # Оптимизированное получение альбомов
+
+
+# Оптимизированное получение альбомов
 def get_albums():
     # Используем составной индекс idx_files_album_article
     results = db_manager.execute_query("""
@@ -362,6 +374,17 @@ def api_stats():
         }), 500
 
 
+# Эндпоинт для метрик Prometheus
+@app.route('/metrics')
+def prometheus_metrics():
+    """Возвращает метрики в формате Prometheus"""
+    # Обновляем метрики при каждом запросе
+    update_metrics(app.start_time)
+    registry = prometheus_client.REGISTRY
+    data, content_type = choose_encoder(request.headers.get("Accept"))
+    return data(registry), 200, {"Content-Type": content_type}
+
+
 # --- Routes ---
 @app.route('/')
 def index():
@@ -436,6 +459,81 @@ def upload_zip():
             return jsonify({'message': 'Files uploaded successfully', 'album_name': result})
         else:
             return jsonify({'error': f'Failed to process ZIP file: {result}'}), 500
+
+
+# Загрузка отдельных изображений
+@app.route('/upload-image', methods=['POST'])
+@permission_required(Permissions.ACCESS_ADMIN)
+def upload_image():
+    logger.info("Upload image endpoint called")
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file part'}), 400
+
+    file = request.files['image']
+
+    if file.filename == '':
+        return jsonify({'error': 'No selected image file'}), 400
+
+    # Проверяем тип файла
+    if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')):
+        return jsonify({'error': 'Invalid file type. Only images are allowed'}), 400
+
+    if file:
+        # Получаем ID пользователя из сессии
+        user = session.get('user', {})
+        user_id = user.get('sub', 'unknown_user')
+        
+        # Создаем альбом "Generic" и артикул из ID пользователя
+        album_name = "Generic"
+        article_number = user_id
+        
+        # Генерируем уникальное имя файла
+        filename = secure_filename(file.filename)
+        name, ext = os.path.splitext(filename)
+        timestamp = int(time.time())
+        unique_filename = f"{album_name}/{article_number}/{name}_{timestamp}{ext}"
+        
+        # Полный путь для сохранения
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        
+        # Сохраняем файл
+        file.save(full_path)
+        
+        # Генерируем публичную ссылку
+        public_link = f"{base_url}/images/{unique_filename}"
+        
+        # Сохраняем в базу данных
+        try:
+            db_manager.execute_query(
+                "INSERT INTO files (filename, album_name, article_number, public_link) VALUES (%s, %s, %s, %s)",
+                (unique_filename, album_name, article_number, public_link),
+                commit=True
+            )
+            
+            # Создаем миниатюры
+            create_thumbnail(full_path, app.config['THUMBNAIL_SIZE'])
+            create_thumbnail(full_path, app.config['PREVIEW_SIZE'])
+            
+            log_user_action('upload_image', 'image', unique_filename, {
+                'album_name': album_name,
+                'article_number': article_number,
+                'original_filename': file.filename
+            })
+            
+            return jsonify({
+                'message': 'Image uploaded successfully', 
+                'album_name': album_name,
+                'article_number': article_number,
+                'filename': unique_filename,
+                'public_link': public_link
+            })
+        except Exception as e:
+            # Удаляем файл, если не удалось записать в базу
+            if os.path.exists(full_path):
+                os.remove(full_path)
+            logger.error(f"Database error during image upload: {e}")
+            return jsonify({'error': f'Failed to save image to database: {str(e)}'}), 500
 
 
 # API: список всех файлов
@@ -577,6 +675,29 @@ def serve_thumbnail(filename, size):
 
     return send_from_directory(os.path.dirname(thumbnail_path),
                                os.path.basename(thumbnail_path))
+
+
+# Маршрут для отдачи оригинальных изображений
+@app.route('/images/<path:filename>')
+@permission_required(Permissions.VIEW_FILES)
+def serve_image(filename):
+    """Отдает оригинальные изображения"""
+    try:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+            
+        # Проверяем, что файл является изображением
+        if not any(file_path.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']):
+            return jsonify({'error': 'File is not an image'}), 400
+            
+        directory = os.path.dirname(file_path)
+        filename_only = os.path.basename(file_path)
+        return send_from_directory(directory, filename_only)
+    except Exception as e:
+        logger.error(f"Error serving image {filename}: {e}")
+        return jsonify({'error': 'Error serving image'}), 500
 
 
 @app.route('/api/export-xlsx', methods=['POST'])
@@ -1026,8 +1147,30 @@ def cleanup():
     db_manager.close()
 
 
+# Запуск периодического обновления метрик в отдельном потоке
+def start_metrics_updater():
+    import threading
+    import time
+    
+    def update_loop():
+        while True:
+            try:
+                update_metrics(app.start_time)
+                time.sleep(30)  # Обновляем метрики каждые 30 секунд
+            except Exception as e:
+                logger.error(f"Error in metrics update loop: {e}")
+                time.sleep(30)  # Даже при ошибке продолжаем цикл
+    
+    # Запускаем в отдельном потоке
+    metrics_thread = threading.Thread(target=update_loop, daemon=True)
+    metrics_thread.start()
+
+
 # Инициализация базы данных при запуске приложения
 init_db()
+
+# Запуск обновления метрик
+start_metrics_updater()
 
 # --- Main ---
 if __name__ == '__main__':

@@ -20,6 +20,8 @@ let dropArea, zipFileInput, browseBtn, uploadBtn, uploadForm, linkList, currentA
 let manageBtn, uploadCard, manageCard, backToUploadBtn;
 // Новые элементы для селекторов
 let albumSelector, articleSelector;
+// Новые элементы для загрузки отдельных изображений
+let imageDropArea, imageFileInput, imageBrowseBtn, uploadImageBtn, uploadImageForm, imageProgressContainer, imageProgressBar, imageProgressText;
 // Элементы для XLSX
 let createXlsxBtn, xlsxModal, xlsxTemplateSelect, separatorSelect, generateXlsxBtn, cancelXlsxBtn;
 // Элементы для экспорта CSV
@@ -38,7 +40,8 @@ let userPermissions = {
     canManageArticles: false,
     canExport: false,
     canViewFiles: false,
-    canViewStats: false
+    canViewStats: false,
+    canUploadIndividual: false
 };
 
 // Конфигурация превью
@@ -251,7 +254,8 @@ function initUserPermissions() {
         canManageArticles: body.getAttribute('data-can-manage-articles') === 'true',
         canExport: body.getAttribute('data-can-export') === 'true',
         canViewFiles: body.getAttribute('data-can-view-files') === 'true',
-        canViewStats: body.getAttribute('data-can-view-stats') === 'true'
+        canViewStats: body.getAttribute('data-can-view-stats') === 'true',
+        canUploadIndividual: body.getAttribute('data-can-upload-individual') === 'true'
     };
 
     console.log('👤 User permissions:', userPermissions);
@@ -385,6 +389,16 @@ function initializeElements() {
     // Новые элементы селекторов
     albumSelector = document.getElementById('albumSelector');
     articleSelector = document.getElementById('articleSelector');
+    
+    // Новые элементы для загрузки отдельных изображений
+    imageDropArea = document.getElementById('imageDropArea');
+    imageFileInput = document.getElementById('imageFile');
+    imageBrowseBtn = document.getElementById('imageBrowseBtn');
+    uploadImageBtn = document.getElementById('uploadImageBtn');
+    uploadImageForm = document.getElementById('uploadImageForm');
+    imageProgressContainer = document.getElementById('imageProgressContainer');
+    imageProgressBar = document.getElementById('imageProgressBar');
+    imageProgressText = document.getElementById('imageProgressText');
 
     // Новые элементы для XLSX
     createXlsxBtn = document.getElementById('createXlsxBtn');
@@ -1404,6 +1418,170 @@ document.addEventListener('DOMContentLoaded', function() {
 
         xhr.open('POST', '/upload');
         xhr.send(formData);
+    });
+
+
+    // --- Обработчики Drag and Drop для отдельных изображений ---
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        imageDropArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        imageDropArea.addEventListener(eventName, () => imageDropArea.classList.add('drag-over'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        imageDropArea.addEventListener(eventName, () => imageDropArea.classList.remove('drag-over'), false);
+    });
+
+    imageDropArea.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            imageFileInput.files = files;
+            updateImageUI();
+        }
+    });
+
+    imageDropArea.addEventListener('click', function(event) {
+        if (event.target && event.target.id === 'imageBrowseBtn') {
+            imageFileInput.click();
+        }
+    });
+
+    imageFileInput.addEventListener('change', () => {
+        updateImageUI();
+    });
+
+    // --- Функция обновления UI для загрузки изображений ---
+    function updateImageUI() {
+        if (!imageFileInput || !imageDropArea || !uploadImageBtn) {
+            console.error('DOM elements not initialized for updateImageUI');
+            return;
+        }
+        const files = imageFileInput.files;
+        if (files.length > 0) {
+            if (files.length === 1) {
+                const file = files[0];
+                const fileSize = formatFileSize(file.size);
+                imageDropArea.innerHTML = `<p>Выбран файл: <strong>${file.name}</strong></p><p>Размер: ${fileSize}</p><p>Готов к загрузке</p>`;
+            } else {
+                let totalSize = 0;
+                for (let i = 0; i < files.length; i++) {
+                    totalSize += files[i].size;
+                }
+                const totalSizeFormatted = formatFileSize(totalSize);
+                imageDropArea.innerHTML = `<p>Выбрано файлов: <strong>${files.length}</strong></p><p>Общий размер: ${totalSizeFormatted}</p><p>Готовы к загрузке</p>`;
+            }
+            if (userPermissions.canUploadIndividual) {
+                uploadImageBtn.disabled = false;
+            }
+        } else {
+            imageDropArea.innerHTML = `<p>Перетащите изображения сюда</p><p>или</p><button type="button" class="btn" id="imageBrowseBtn">Выбрать изображения</button>`;
+            uploadImageBtn.disabled = true;
+        }
+    }
+
+    // --- Обработчик отправки формы загрузки изображений ---
+    uploadImageForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // ПРЯМАЯ ПРОВЕРКА ПРАВ
+        if (!userPermissions.canUploadIndividual) {
+            alert('❌ У вас нет прав для загрузки отдельных файлов. Обратитесь к администратору.');
+            return;
+        }
+
+        if (!imageFileInput || !uploadImageBtn) {
+             console.error('DOM elements for image upload not initialized');
+             return;
+        }
+        const files = imageFileInput.files;
+        if (!files || files.length === 0) {
+            alert('Пожалуйста, выберите изображения для загрузки.');
+            return;
+        }
+
+        // Проверяем типы файлов
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (!file.type.startsWith('image/')) {
+                alert(`Файл ${file.name} не является изображением.`);
+                return;
+            }
+        }
+
+        // Для каждого файла отправляем отдельный запрос
+        imageProgressContainer.style.display = 'block';
+        uploadImageBtn.disabled = true;
+        uploadImageBtn.innerHTML = '<span>Загрузка...</span>';
+        
+        let uploadedCount = 0;
+        const totalFiles = files.length;
+
+        for (let i = 0; i < files.length; i++) {
+            const formData = new FormData();
+            formData.append('image', files[i], files[i].name);
+
+            try {
+                const response = await fetch('/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (!data.error) {
+                        uploadedCount++;
+                        const progress = Math.round((uploadedCount / totalFiles) * 100);
+                        imageProgressBar.style.width = progress + '%';
+                        imageProgressText.textContent = progress + '%';
+                    } else {
+                        console.error('Image upload failed:', data.error);
+                        alert(`Ошибка загрузки изображения: ${data.error}`);
+                    }
+                } else {
+                    const errorData = await response.json();
+                    console.error('Image upload failed with status:', response.status, errorData);
+                    alert(`Ошибка загрузки изображения: HTTP ${response.status} - ${errorData.error || 'Неизвестная ошибка'}`);
+                }
+            } catch (error) {
+                console.error('Network error during image upload:', error);
+                alert(`Ошибка сети при загрузке изображения: ${error.message}`);
+            }
+        }
+
+        // После завершения загрузки всех изображений
+        imageProgressContainer.style.display = 'none';
+        uploadImageBtn.disabled = false;
+        uploadImageBtn.innerHTML = '<span>Загрузить изображения</span>';
+        
+        // Очищаем форму
+        imageFileInput.value = '';
+        updateImageUI();
+        
+        // Показываем сообщение о завершении
+        if (uploadedCount > 0) {
+            alert(`Загрузка завершена! Успешно загружено ${uploadedCount} из ${totalFiles} файлов.`);
+            
+            // Обновляем список файлов
+            if (albumSelector.value) {
+                // Обновляем альбом Generic и перезагружаем список артикулов
+                await loadArticles('Generic');
+                showFilesForAlbum('Generic');
+            } else {
+                albumSelector.value = 'Generic';
+                await loadArticles('Generic');
+                showFilesForAlbum('Generic');
+            }
+        } else {
+            alert('Не удалось загрузить ни одного изображения.');
+        }
     });
 
 

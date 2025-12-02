@@ -8,3 +8,4 @@ jwt
 requests
 python-dotenv
 werkzeug
+prometheus-client
