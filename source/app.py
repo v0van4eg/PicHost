@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timedelta
 
 from PIL import Image
-from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
+from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file, redirect, url_for
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -28,7 +28,7 @@ from sync_manager import SyncManager
 # Модули приложения
 from utils import cleanup_album_thumbnails, log_user_action
 from zip_processor import ZipProcessor
-from metrics import update_metrics, ACTIVE_CONNECTIONS, ALBUM_COUNT, ARTICLE_COUNT, FILE_COUNT, DISK_USAGE_TOTAL, DISK_USAGE_FREE, DISK_USAGE_USED, DB_SIZE, UPTIME
+from metrics import update_metrics
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
@@ -40,7 +40,6 @@ SESSION_TIMEOUT = int(os.environ.get('SESSION_TIMEOUT', 8 * 60 * 60))  # 8 ча�
 # Добавить в начало app.py для отслеживания времени запуска
 app.start_time = datetime.now()
 
-# Остальные метрики импортируются из модуля metrics
 
 # Middleware для проверки времени жизни сессии
 @app.before_request
