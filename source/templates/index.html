@@ -12,7 +12,8 @@
       data-can-manage-articles="{{ 'true' if has_permission(Permissions.MANAGE_ARTICLES) else 'false' }}"
       data-can-export="{{ 'true' if has_permission(Permissions.EXPORT_DATA) else 'false' }}"
       data-can-view-files="{{ 'true' if has_permission(Permissions.VIEW_FILES) else 'false' }}"
-      data-can-view-stats="{{ 'true' if has_permission(Permissions.SYNC_DATABASE) else 'false' }}">
+      data-can-view-stats="{{ 'true' if has_permission(Permissions.SYNC_DATABASE) else 'false' }}"
+      data-can-upload-individual="{{ 'true' if has_permission(Permissions.ACCESS_ADMIN) else 'false' }}">
     <div class="container">
         <header style="display: flex; justify-content: center; align-items: center; position: relative;">
             <div style="text-align: center;">
@@ -66,8 +67,9 @@
                         </div>
                     </form>
                     
-                    <!-- Карточка загрузки отдельных изображений -->
-                    <div id="uploadImageCard">
+                    <!-- Карточка загрузки отдельных изображений - показывается только если есть право ACCESS_ADMIN -->
+                    <div id="uploadImageCard"
+                         {% if not has_permission(Permissions.ACCESS_ADMIN) %}style="display: none;"{% endif %}>
                         <h2>🖼️ Загрузить отдельные изображения</h2>
                         <form id="uploadImageForm" enctype="multipart/form-data">
                             <div class="upload-area" id="imageDropArea">
@@ -88,6 +90,19 @@
                             </div>
                         </form>
                     </div>
+                    
+                    <!-- Сообщение о недоступности загрузки отдельных изображений -->
+                    {% if not has_permission(Permissions.ACCESS_ADMIN) %}
+                    <div id="uploadImageCardDisabled" style="display: block;">
+                        <h2>🖼️ Загрузить отдельные изображения</h2>
+                        <div style="text-align: center; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; margin-top: 10px;">
+                            <p style=\"margin: 0; color: #856404;\">❌ У вас нет прав для загрузки отдельных файлов</p>
+                            <p style=\"margin: 5px 0 0 0; font-size: 0.9rem; color: #856404;\">
+                                Только администраторы могут загружать отдельные файлы
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
 
                     <button class="btnmanage" id="manageBtn">
                         <span>Управление ссылками</span>

@@ -463,7 +463,7 @@ def upload_zip():
 
 # Загрузка отдельных изображений
 @app.route('/upload-image', methods=['POST'])
-@permission_required(Permissions.UPLOAD_ZIP)
+@permission_required(Permissions.ACCESS_ADMIN)
 def upload_image():
     logger.info("Upload image endpoint called")
     if 'image' not in request.files:
