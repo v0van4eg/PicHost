@@ -1,48 +1,8 @@
-```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
-*.out
-
-# Dependencies
-.venv/
-venv/
-node_modules/
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-
-# Environment
+.venv
+.idea
+thumbnails
+images
+postgres_data
+__pycache__
+create_src.py
 .env
-.env.local
-*.env.*
-
-# Editors
-.vscode/
-.idea/
-
-# Distribution artifacts
-dist/
-build/
-target/
-
-# Python specific
-*.pyc
-__pycache__/
-*.pyo
-*.pyd
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Cache directories
-.mypy_cache/
-.pytest_cache/
-.coverage*/
-```
