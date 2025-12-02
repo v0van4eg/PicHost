@@ -3,6 +3,7 @@
 thumbnails
 images
 postgres_data
+logs
 __pycache__
 create_src.py
 .env

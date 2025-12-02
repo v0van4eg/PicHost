@@ -4,7 +4,9 @@ thumbnails
 images
 postgres_data
 __pycache__
+logs
 create_src.py
+download.py
 docker-compose.yml
 init.sql
 nginx.conf
