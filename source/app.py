@@ -8,7 +8,7 @@ import os
 import shutil
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from PIL import Image
 from flask import Flask, request, session, jsonify, render_template, send_from_directory, send_file
@@ -34,10 +34,37 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+# Настройка времени жизни сессии (в секундах, по умолчанию 8 часов)
+SESSION_TIMEOUT = int(os.environ.get('SESSION_TIMEOUT', 8 * 60 * 60))  # 8 часов в секундах
+
 # Добавить в начало app.py для отслеживания времени запуска
 app.start_time = datetime.now()
 
 # Остальные метрики импортируются из модуля metrics
+
+# Middleware для проверки времени жизни сессии
+@app.before_request
+def check_session_timeout():
+    if 'user' in session:
+        # Проверяем, есть ли время последней активности
+        last_activity = session.get('last_activity')
+        if last_activity:
+            # Преобразуем строку времени в объект datetime
+            last_activity_time = datetime.fromisoformat(last_activity)
+            # Проверяем, не истекло ли время сессии
+            if datetime.now() - last_activity_time > timedelta(seconds=SESSION_TIMEOUT):
+                # Сессия истекла, очищаем сессию и редиректим на страницу авторизации
+                session.clear()
+                logger.info("Session expired due to timeout")
+                if request.path.startswith('/api/'):
+                    # Для API запросов возвращаем JSON ошибку
+                    return jsonify({'error': 'Session expired', 'redirect': '/hello'}), 401
+                else:
+                    # Для обычных запросов редиректим на страницу авторизации
+                    return redirect(url_for('hello'))
+        
+        # Обновляем время последней активности
+        session['last_activity'] = datetime.now().isoformat()
 
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
@@ -406,6 +433,28 @@ def index():
 @app.route('/hello')
 def hello():
     return render_template('hello.html', base_url=base_url)
+
+
+# Эндпоинт для проверки сессии
+@app.route('/api/session-check')
+def api_session_check():
+    """Проверяет, действительна ли сессия пользователя"""
+    from flask import session
+    if 'user' in session:
+        # Проверяем время последней активности
+        last_activity = session.get('last_activity')
+        if last_activity:
+            from datetime import datetime, timedelta
+            last_activity_time = datetime.fromisoformat(last_activity)
+            if datetime.now() - last_activity_time > timedelta(seconds=SESSION_TIMEOUT):
+                # Сессия истекла
+                session.clear()
+                return jsonify({'error': 'Session expired', 'redirect': '/hello'}), 401
+        # Обновляем время последней активности
+        session['last_activity'] = datetime.now().isoformat()
+        return jsonify({'status': 'active', 'user': session['user']['name']})
+    else:
+        return jsonify({'error': 'Not authenticated', 'redirect': '/hello'}), 401
 
 
 # Эндпоинт для принудительной очистки превью альбома

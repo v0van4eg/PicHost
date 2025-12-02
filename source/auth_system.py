@@ -233,6 +233,7 @@ class AuthManager:
 
             session['user'] = session_user_data
             session['id_token'] = token.get('id_token')  # Только для logout
+            session['last_activity'] = datetime.now().isoformat()  # Устанавливаем время последней активности при логине
             session.permanent = True
 
             # ЛОГИРОВАНИЕ УСПЕШНОГО ВХОДА
