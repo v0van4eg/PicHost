@@ -40,7 +40,8 @@ let userPermissions = {
     canManageArticles: false,
     canExport: false,
     canViewFiles: false,
-    canViewStats: false
+    canViewStats: false,
+    canUploadIndividual: false
 };
 
 // Конфигурация превью
@@ -253,7 +254,8 @@ function initUserPermissions() {
         canManageArticles: body.getAttribute('data-can-manage-articles') === 'true',
         canExport: body.getAttribute('data-can-export') === 'true',
         canViewFiles: body.getAttribute('data-can-view-files') === 'true',
-        canViewStats: body.getAttribute('data-can-view-stats') === 'true'
+        canViewStats: body.getAttribute('data-can-view-stats') === 'true',
+        canUploadIndividual: body.getAttribute('data-can-upload-individual') === 'true'
     };
 
     console.log('👤 User permissions:', userPermissions);
@@ -1476,7 +1478,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const totalSizeFormatted = formatFileSize(totalSize);
                 imageDropArea.innerHTML = `<p>Выбрано файлов: <strong>${files.length}</strong></p><p>Общий размер: ${totalSizeFormatted}</p><p>Готовы к загрузке</p>`;
             }
-            if (userPermissions.canUpload) {
+            if (userPermissions.canUploadIndividual) {
                 uploadImageBtn.disabled = false;
             }
         } else {
@@ -1490,8 +1492,8 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
 
         // ПРЯМАЯ ПРОВЕРКА ПРАВ
-        if (!userPermissions.canUpload) {
-            alert('❌ У вас нет прав для загрузки файлов. Обратитесь к администратору.');
+        if (!userPermissions.canUploadIndividual) {
+            alert('❌ У вас нет прав для загрузки отдельных файлов. Обратитесь к администратору.');
             return;
         }
 
