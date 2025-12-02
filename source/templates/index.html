@@ -70,7 +70,7 @@
                     <!-- Карточка загрузки отдельных изображений - показывается только если есть право ACCESS_ADMIN -->
                     <div id="uploadImageCard"
                          {% if not has_permission(Permissions.ACCESS_ADMIN) %}style="display: none;"{% endif %}>
-                        <h2>🖼️ Загрузить отдельные изображения</h2>
+                        <h2>🖼️ Загрузить изображения</h2>
                         <form id="uploadImageForm" enctype="multipart/form-data">
                             <div class="upload-area" id="imageDropArea">
                                 <p>Перетащите изображения сюда</p>
