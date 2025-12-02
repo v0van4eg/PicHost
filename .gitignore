@@ -5,7 +5,4 @@ images
 postgres_data
 __pycache__
 create_src.py
-docker-compose.yml
-init.sql
-nginx.conf
 .env

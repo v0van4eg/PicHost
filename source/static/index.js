@@ -3,6 +3,60 @@
 // --- Инициализация глобальных переменных ---
 console.log('PicHost initialized');
 
+// --- Настройки времени жизни сессии ---
+const SESSION_CHECK_INTERVAL = 60000; // Проверка каждую минуту
+let sessionCheckTimer = null;
+
+// Функция проверки сессии на сервере
+async function checkSession() {
+    try {
+        const response = await fetch('/api/session-check', {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        
+        if (response.status === 401) {
+            // Сессия истекла, перенаправляем на страницу авторизации
+            console.log('Session expired, redirecting to login...');
+            window.location.href = '/hello';
+            return false;
+        }
+        
+        return response.ok;
+    } catch (error) {
+        console.error('Error checking session:', error);
+        return false;
+    }
+}
+
+// Инициализация проверки сессии
+function initSessionCheck() {
+    if (sessionCheckTimer) {
+        clearInterval(sessionCheckTimer);
+    }
+    
+    sessionCheckTimer = setInterval(async () => {
+        await checkSession();
+    }, SESSION_CHECK_INTERVAL);
+}
+
+// Обертка для fetch, чтобы автоматически обрабатывать 401 ошибки
+async function apiFetch(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        credentials: 'same-origin'
+    });
+    
+    if (response.status === 401) {
+        // Сессия истекла, перенаправляем на страницу авторизации
+        console.log('Session expired during API call, redirecting to login...');
+        window.location.href = '/hello';
+        return null;
+    }
+    
+    return response;
+}
+
 // --- Функция форматирования размера файла ---
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -104,7 +158,9 @@ async function loadStats() {
     }
 
     try {
-        const response = await fetch('/api/stats');
+        const response = await apiFetch('/api/stats');
+        if (!response) return null; // Проверка на null в случае 401
+        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -574,7 +630,9 @@ async function updateTitleWithCount(albumName, articleName = '') {
 // --- Функции для работы с селекторами ---
 async function loadAlbums() {
     try {
-        const response = await fetch('/api/albums');
+        const response = await apiFetch('/api/albums');
+        if (!response) return []; // Проверка на null в случае 401
+        
         if (!response.ok) throw new Error('Failed to load albums');
         const albums = await response.json();
 
@@ -606,7 +664,9 @@ async function loadArticles(albumName) {
 
     try {
         console.log('Loading articles for album:', albumName);
-        const response = await fetch(`/api/articles/${encodeURIComponent(albumName)}`);
+        const response = await apiFetch(`/api/articles/${encodeURIComponent(albumName)}`);
+        if (!response) return []; // Проверка на null в случае 401
+        
         if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load articles`);
 
         const articles = await response.json();
@@ -788,7 +848,9 @@ async function showFilesForAlbum(albumName, articleName = '') {
 
         console.log('Fetching URL:', url);
 
-        const response = await fetch(url);
+        const response = await apiFetch(url);
+        if (!response) return; // Проверка на null в случае 401
+        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -878,9 +940,10 @@ async function deleteAlbum(albumName) {
     }
 
     try {
-        const response = await fetch(`/api/delete-album/${encodeURIComponent(albumName)}`, {
+        const response = await apiFetch(`/api/delete-album/${encodeURIComponent(albumName)}`, {
             method: 'DELETE'
         });
+        if (!response) return; // Проверка на null в случае 401
 
         if (!response.ok) {
             const errorData = await response.json();
@@ -910,9 +973,10 @@ async function deleteArticle(albumName, articleName) {
     }
 
     try {
-        const response = await fetch(`/api/delete-article/${encodeURIComponent(albumName)}/${encodeURIComponent(articleName)}`, {
+        const response = await apiFetch(`/api/delete-article/${encodeURIComponent(albumName)}/${encodeURIComponent(articleName)}`, {
             method: 'DELETE'
         });
+        if (!response) return; // Проверка на null в случае 401
 
         if (!response.ok) {
             const errorData = await response.json();
@@ -1628,6 +1692,9 @@ document.addEventListener('DOMContentLoaded', function() {
     initDeleteButtons();
     updateCreateXlsxButtonState();
     updateDeleteButtonsState();
+
+    // Инициализация проверки сессии
+    initSessionCheck();
 
     // Добавляем очистку интервала при разгрузке страницы
     window.addEventListener('beforeunload', stopStatsAutoRefresh);
