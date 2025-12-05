@@ -24,6 +24,7 @@ services:
     environment:
       - DOMAIN=${DOMAIN}
       - SESSION_TIMEOUT=${SESSION_TIMEOUT}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
       # Передаем базовые переменные для построения строки подключения
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}

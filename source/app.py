@@ -32,6 +32,7 @@ from metrics import update_metrics
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
+print(app.secret_key)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Настройка времени жизни сессии (в секундах, по умолчанию 8 часов)

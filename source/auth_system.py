@@ -144,10 +144,14 @@ class AuthManager:
 
     def register_routes(self):
         """Регистрация маршрутов аутентификации"""
-
         @self.app.route('/login')
         def login():
             logger.info("Запуск процесса аутентификации")
+            # Добавить логи о клиенте
+            logger.info(f"Client ID: {self.keycloak.client_id}")
+            logger.info(f"Client secret: {self.keycloak.client_secret}")
+            logger.info(f"Redirect URI: {url_for('auth_callback', _external=True)}")
+            logger.info(f"Allowed roles: {self.allowed_roles}")
             return self._handle_login()
 
         @self.app.route('/auth/callback')
@@ -165,10 +169,8 @@ class AuthManager:
             nonce = secrets.token_urlsafe(16)
             session['nonce'] = nonce
             session['login_redirect'] = request.args.get('next', url_for('index'))
-
             redirect_uri = url_for('auth_callback', _external=True)
             self.app.logger.info(f"Starting OAuth flow with redirect_uri: {redirect_uri}")
-
             return self.keycloak.authorize_redirect(redirect_uri, nonce=nonce)
         except Exception as e:
             self.app.logger.error(f"Login error: {str(e)}")
@@ -332,8 +334,6 @@ class AuthManager:
             return url_for('hello')
 
 
-# auth_system.py
-
 def permission_required(permission):
     """Единственный декоратор для проверки логина и прав"""
 
@@ -354,11 +354,8 @@ def permission_required(permission):
                 <p>У вас недостаточно прав для выполнения этого действия.</p>
                 <a href="/">На главную</a>
                 ''', 403
-
             return f(*args, **kwargs)
-
         return decorated_function
-
     return decorator
 
 
