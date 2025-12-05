@@ -4,62 +4,58 @@ import os
 import shutil
 import psutil
 from datetime import datetime
-
 from prometheus_client import Gauge, generate_latest, CollectorRegistry, multiprocess
-from prometheus_client.exposition import choose_encoder
-import prometheus_client
 import logging
-
 from database import db_manager
 
 logger = logging.getLogger(__name__)
 
 # Определение метрик Prometheus
 ACTIVE_CONNECTIONS = Gauge(
-    'active_connections', 
+    'active_connections',
     'Number of active connections'
 )
 
 ALBUM_COUNT = Gauge(
-    'album_count', 
+    'album_count',
     'Number of albums'
 )
 
 ARTICLE_COUNT = Gauge(
-    'article_count', 
+    'article_count',
     'Number of articles'
 )
 
 FILE_COUNT = Gauge(
-    'file_count', 
+    'file_count',
     'Number of files'
 )
 
 DISK_USAGE_TOTAL = Gauge(
-    'disk_usage_bytes_total', 
+    'disk_usage_bytes_total',
     'Total disk space in bytes',
     ['path']
 )
 
 DISK_USAGE_FREE = Gauge(
-    'disk_usage_bytes_free', 
+    'disk_usage_bytes_free',
     'Free disk space in bytes',
     ['path']
 )
 
 DISK_USAGE_USED = Gauge(
-    'disk_usage_bytes_used', 
+    'disk_usage_bytes_used',
     'Used disk space in bytes',
     ['path']
 )
 
 DB_SIZE = Gauge(
-    'database_size_bytes', 
+    'database_size_bytes',
     'Database size in bytes'
 )
 
 UPTIME = Gauge(
-    'application_uptime_seconds', 
+    'application_uptime_seconds',
     'Application uptime in seconds'
 )
 

@@ -61,9 +61,10 @@ def check_session_timeout():
                 else:
                     # Для обычных запросов редиректим на страницу авторизации
                     return redirect(url_for('hello'))
-        
+
         # Обновляем время последней активности
         session['last_activity'] = datetime.now().isoformat()
+
 
 # Инициализация аутентификации (теперь параметры берутся из переменных окружения)
 auth_manager = AuthManager()
@@ -231,9 +232,6 @@ def init_db():
             else:
                 logger.error(f"Failed to initialize database after {max_retries} attempts: {e}")
                 raise
-
-
-# Оптимизированное получение альбомов
 
 
 # Оптимизированное получение альбомов
@@ -530,27 +528,27 @@ def upload_image():
         # Получаем ID пользователя из сессии
         user = session.get('user', {})
         user_id = user.get('sub', 'unknown_user')
-        
+
         # Создаем альбом "Generic" и артикул из ID пользователя
         album_name = "Generic"
         article_number = user_id
-        
+
         # Генерируем уникальное имя файла
         filename = secure_filename(file.filename)
         name, ext = os.path.splitext(filename)
         timestamp = int(time.time())
         unique_filename = f"{album_name}/{article_number}/{name}_{timestamp}{ext}"
-        
+
         # Полный путь для сохранения
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        
+
         # Сохраняем файл
         file.save(full_path)
-        
+
         # Генерируем публичную ссылку
         public_link = f"{base_url}/images/{unique_filename}"
-        
+
         # Сохраняем в базу данных
         try:
             db_manager.execute_query(
@@ -558,19 +556,19 @@ def upload_image():
                 (unique_filename, album_name, article_number, public_link),
                 commit=True
             )
-            
+
             # Создаем миниатюры
             create_thumbnail(full_path, app.config['THUMBNAIL_SIZE'])
             create_thumbnail(full_path, app.config['PREVIEW_SIZE'])
-            
+
             log_user_action('upload_image', 'image', unique_filename, {
                 'album_name': album_name,
                 'article_number': article_number,
                 'original_filename': file.filename
             })
-            
+
             return jsonify({
-                'message': 'Image uploaded successfully', 
+                'message': 'Image uploaded successfully',
                 'album_name': album_name,
                 'article_number': article_number,
                 'filename': unique_filename,
@@ -732,14 +730,14 @@ def serve_image(filename):
     """Отдает оригинальные изображения"""
     try:
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
+
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404
-            
+
         # Проверяем, что файл является изображением
         if not any(file_path.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']):
             return jsonify({'error': 'File is not an image'}), 400
-            
+
         directory = os.path.dirname(file_path)
         filename_only = os.path.basename(file_path)
         return send_from_directory(directory, filename_only)
@@ -1199,7 +1197,7 @@ def cleanup():
 def start_metrics_updater():
     import threading
     import time
-    
+
     def update_loop():
         while True:
             try:
@@ -1208,7 +1206,7 @@ def start_metrics_updater():
             except Exception as e:
                 logger.error(f"Error in metrics update loop: {e}")
                 time.sleep(30)  # Даже при ошибке продолжаем цикл
-    
+
     # Запускаем в отдельном потоке
     metrics_thread = threading.Thread(target=update_loop, daemon=True)
     metrics_thread.start()

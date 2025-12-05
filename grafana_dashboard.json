@@ -73,8 +73,8 @@
       },
       "id": 1,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
+        "colorMode": "none",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
@@ -98,6 +98,8 @@
           },
           "editorMode": "code",
           "expr": "application_uptime_seconds",
+          "format": "time_series",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -392,8 +394,9 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
+          "fieldMinMax": false,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -416,7 +419,7 @@
       "id": 5,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
@@ -480,7 +483,7 @@
       "id": 6,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
@@ -544,7 +547,7 @@
       "id": 7,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
@@ -608,7 +611,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -616,9 +619,9 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "pointSize": 5,
+            "pointSize": 3,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -677,7 +680,7 @@
             "type": "prometheus",
             "uid": "bez1rnfarksg0c"
           },
-          "editorMode": "code",
+          "editorMode": "builder",
           "expr": "rate(process_cpu_seconds_total[5m]) * 100",
           "legendFormat": "CPU Usage",
           "range": true,
@@ -706,7 +709,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 26,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -714,9 +717,12 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "smooth",
+            "lineStyle": {
+              "fill": "solid"
+            },
             "lineWidth": 1,
-            "pointSize": 5,
+            "pointSize": 3,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -737,10 +743,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -775,9 +777,9 @@
             "type": "prometheus",
             "uid": "bez1rnfarksg0c"
           },
-          "editorMode": "code",
-          "expr": "process_virtual_memory_bytes",
-          "legendFormat": "Виртуальная память (VMS)",
+          "editorMode": "builder",
+          "expr": "memory_bytes_total{job=\"pichosting_app\"}",
+          "legendFormat": "Всего",
           "range": true,
           "refId": "A"
         },
@@ -786,9 +788,11 @@
             "type": "prometheus",
             "uid": "bez1rnfarksg0c"
           },
-          "editorMode": "code",
-          "expr": "process_resident_memory_bytes",
-          "legendFormat": "Резидентная память (RSS)",
+          "editorMode": "builder",
+          "expr": "memory_bytes_used{job=\"pichosting_app\"}",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Занято",
           "range": true,
           "refId": "B"
         }
@@ -812,5 +816,5 @@
   "timezone": "browser",
   "title": "Pichosting Application",
   "uid": "python-app-d",
-  "version": 2
+  "version": 9
 }
