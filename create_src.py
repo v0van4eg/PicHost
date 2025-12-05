@@ -33,6 +33,10 @@ def load_gitignore_rules(startpath):
     ignore_rules.append("download.py")
     ignore_rules.append("favicon.ico")
     ignore_rules.append("LICENSE.txt")
+    ignore_rules.append("images/*")
+    ignore_rules.append("thumbnails/*")
+    ignore_rules.append("postgres_data/*")
+    ignore_rules.append("logs/*")
     return ignore_rules
 
 
