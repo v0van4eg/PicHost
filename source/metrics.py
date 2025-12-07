@@ -2,66 +2,68 @@
 
 import os
 import shutil
-import time
+import psutil
 from datetime import datetime
-
 from prometheus_client import Gauge, generate_latest, CollectorRegistry, multiprocess
-from prometheus_client.exposition import choose_encoder
-import prometheus_client
 import logging
-
 from database import db_manager
 
 logger = logging.getLogger(__name__)
 
-# Определение метрик Prometheus (без HTTP-метрик)
+# Определение метрик Prometheus
 ACTIVE_CONNECTIONS = Gauge(
-    'active_connections', 
+    'active_connections',
     'Number of active connections'
 )
 
 ALBUM_COUNT = Gauge(
-    'album_count', 
+    'album_count',
     'Number of albums'
 )
 
 ARTICLE_COUNT = Gauge(
-    'article_count', 
+    'article_count',
     'Number of articles'
 )
 
 FILE_COUNT = Gauge(
-    'file_count', 
+    'file_count',
     'Number of files'
 )
 
 DISK_USAGE_TOTAL = Gauge(
-    'disk_usage_bytes_total', 
+    'disk_usage_bytes_total',
     'Total disk space in bytes',
     ['path']
 )
 
 DISK_USAGE_FREE = Gauge(
-    'disk_usage_bytes_free', 
+    'disk_usage_bytes_free',
     'Free disk space in bytes',
     ['path']
 )
 
 DISK_USAGE_USED = Gauge(
-    'disk_usage_bytes_used', 
+    'disk_usage_bytes_used',
     'Used disk space in bytes',
     ['path']
 )
 
 DB_SIZE = Gauge(
-    'database_size_bytes', 
+    'database_size_bytes',
     'Database size in bytes'
 )
 
 UPTIME = Gauge(
-    'application_uptime_seconds', 
+    'application_uptime_seconds',
     'Application uptime in seconds'
 )
+
+# Метрики использования памяти
+MEMORY_TOTAL = Gauge('memory_bytes_total', 'Total physical memory in bytes')
+MEMORY_USED = Gauge('memory_bytes_used', 'Used physical memory in bytes')
+MEMORY_FREE = Gauge('memory_bytes_free', 'Free physical memory in bytes')
+MEMORY_PERCENT = Gauge('memory_percent_used', 'Percentage of used memory')
 
 
 def update_metrics(start_time=None):
@@ -131,6 +133,13 @@ def update_metrics(start_time=None):
         # Обновление числа активных подключений (примерное значение)
         # В реальном приложении это может быть сложнее реализовать, поэтому пока ставим 0
         ACTIVE_CONNECTIONS.set(0)
+
+        # Обновление метрик памяти
+        mem = psutil.virtual_memory()
+        MEMORY_TOTAL.set(mem.total)
+        MEMORY_USED.set(mem.used)
+        MEMORY_FREE.set(mem.available)  # mem.free в Linux почти всегда мало; available — более точное "свободно"
+        MEMORY_PERCENT.set(mem.percent)
 
     except Exception as e:
         logger.error(f"Error updating metrics: {e}")

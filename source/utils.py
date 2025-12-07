@@ -107,7 +107,6 @@ def get_client_info():
         }
 
 
-
 def log_user_login(user_info, login_method='oauth'):
     """
     Специальная функция для логирования успешного входа пользователя
@@ -259,4 +258,3 @@ def log_user_action(action, resource_type=None, resource_name=None, details=None
             f"Logged action '{action}' for user '{display_name}' on {resource_type or 'N/A'} '{resource_name or 'N/A'}'")
     except Exception as e:
         logger.error(f"Failed to log action '{action}' for user '{display_name}': {e}")
-
