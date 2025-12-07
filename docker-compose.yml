@@ -50,7 +50,6 @@ services:
     depends_on:
       - db
 
-
   web:
     image: nginx:alpine
     container_name: nginx
@@ -67,8 +66,3 @@ services:
     restart: always
     depends_on:
       - app
-
-volumes:
-  thumbnails:
-
-
