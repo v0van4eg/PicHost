@@ -616,47 +616,85 @@ def api_articles(album_name):
 @permission_required(Permissions.VIEW_FILES)
 def api_files_filtered(album_name, article_name=None):
     logger.info(f"API files filtered endpoint called for album: {album_name}, article: {article_name}")
+    
+    def extract_suffix(filename):
+        """Извлекает числовой суффикс из имени файла для сортировки.
+        Поддерживает форматы:
+        - номер.расширение (например, 1.jpg, 04.jpg, 11.jpg)
+        - имя_номер.расширение (например, file_1.jpg, asfas_1.jpg)
+        """
+        # Сначала проверяем формат номер.расширение (например, 1.jpg, 04.jpg, 11.jpg)
+        match = re.match(r'^([0-9]+)\.', filename)
+        if match:
+            return (0, int(match.group(1)))  # Приоритет 0 для чистых номеров
+        # Затем проверяем формат имя_номер.расширение (например, file_1.jpg, asfas_1.jpg)
+        match = re.search(r'_([0-9]+)(\.[^.]+)?$', filename)
+        if match:
+            return (1, int(match.group(1)))  # Приоритет 1 для имя_номер
+        # Если не нашли числовой паттерн, возвращаем большое число для сортировки в конец
+        return (2, float('inf'))
+    
     if article_name:
         results = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link, created_at FROM files \
-                WHERE album_name = %s AND article_number = %s ORDER BY created_at DESC",
+            "SELECT filename, album_name, article_number, public_link, created_at FROM files \\\n                WHERE album_name = %s AND article_number = %s",
             (album_name, article_name),
             fetch=True
         )
     else:
         results = db_manager.execute_query(
-            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE \
-                album_name = %s ORDER BY created_at DESC",
+            "SELECT filename, album_name, article_number, public_link, created_at FROM files WHERE \\\n                album_name = %s",
             (album_name,),
             fetch=True
         )
-
+    
+    # Сортируем результаты по числовому суффиксу имени файла
+    if results:
+        results = sorted(results, key=lambda x: extract_suffix(x['filename']))
+    
     return jsonify(results if results else [])
 
 
-# Новые эндпоинты для превью
 @app.route('/api/thumbnails/<album_name>')
 @app.route('/api/thumbnails/<album_name>/<article_name>')
 @permission_required(Permissions.VIEW_FILES)
 def api_thumbnails(album_name, article_name=None):
     """API для получения информации о файлах с превью"""
     try:
+        def extract_suffix(filename):
+            """Извлекает числовой суффикс из имени файла для сортировки.
+            Поддерживает форматы:
+            - номер.расширение (например, 1.jpg, 04.jpg, 11.jpg)
+            - имя_номер.расширение (например, file_1.jpg, asfas_1.jpg)
+            """
+            # Сначала проверяем формат номер.расширение (например, 1.jpg, 04.jpg, 11.jpg)
+            match = re.match(r'^([0-9]+)\.', filename)
+            if match:
+                return (0, int(match.group(1)))  # Приоритет 0 для чистых номеров
+            # Затем проверяем формат имя_номер.расширение (например, file_1.jpg, asfas_1.jpg)
+            match = re.search(r'_([0-9]+)(\.[^.]+)?$', filename)
+            if match:
+                return (1, int(match.group(1)))  # Приоритет 1 для имя_номер
+            # Если не нашли числовой паттерн, возвращаем большое число для сортировки в конец
+            return (2, float('inf'))
+        
         if article_name:
             results = db_manager.execute_query(
                 """SELECT filename, album_name, article_number, public_link, created_at 
-                   FROM files WHERE album_name = %s AND article_number = %s 
-                   ORDER BY created_at DESC""",
+                   FROM files WHERE album_name = %s AND article_number = %s""",
                 (album_name, article_name),
                 fetch=True
             )
         else:
             results = db_manager.execute_query(
                 """SELECT filename, album_name, article_number, public_link, created_at 
-                   FROM files WHERE album_name = %s 
-                   ORDER BY created_at DESC""",
+                   FROM files WHERE album_name = %s""",
                 (album_name,),
                 fetch=True
             )
+        
+        # Сортируем результаты по числовому суффиксу имени файла
+        if results:
+            results = sorted(results, key=lambda x: extract_suffix(x['filename']))
 
         files_data = []
         if results:
