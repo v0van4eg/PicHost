@@ -242,12 +242,22 @@ class DocumentGenerator:
         """Группирует файлы по артикулам с правильной сортировкой"""
 
         def extract_suffix(filename):
-            """Извлекает числовой суффикс из имени файла для сортировки"""
+            """Извлекает числовой суффикс из имени файла для сортировки.
+            Поддерживает форматы:
+            - имя_номер.расширение (например, file_1.jpg, asfas_1.jpg)
+            - номер.расширение (например, 1.jpg, 04.jpg, 11.jpg)
+            """
             import re
-            match = re.search(r'(.+)_(\d+)(\.[^.]*)?$', filename)
+            # Пробуем найти формат имя_номер.расширение (например, file_1.jpg, asfas_1.jpg)
+            match = re.search(r'_([0-9]+)(\.[^.]+)?$', filename)
             if match:
-                return int(match.group(2))
-            return 0
+                return int(match.group(1))
+            # Пробуем найти формат номер.расширение в начале имени (например, 1.jpg, 04.jpg)
+            match = re.match(r'^([0-9]+)(\.[^.]+)?$', filename)
+            if match:
+                return int(match.group(1))
+            # Если не нашли числовой паттерн, возвращаем большое число для сортировки в конец
+            return float('inf')
 
         # Сортируем результаты по артикулу и числовому суффиксу
         sorted_results = sorted(files_data, key=lambda x: (x['article_number'], extract_suffix(x['filename'])))
